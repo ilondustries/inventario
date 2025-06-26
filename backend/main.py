@@ -11,6 +11,11 @@ import logging
 import hashlib
 import secrets
 import time
+import qrcode
+import base64
+from io import BytesIO
+import barcode
+from barcode.writer import ImageWriter
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -62,6 +67,74 @@ def get_db_connection():
         logger.error(f"Error conectando a la base de datos: {e}")
         raise
 
+def generar_codigo_qr(producto_id: int, nombre: str, codigo_barras: str = None) -> str:
+    """Generar código QR para un producto y devolverlo como base64"""
+    try:
+        # Crear contenido del QR con información del producto
+        contenido = f"ID:{producto_id}|Nombre:{nombre}"
+        if codigo_barras:
+            contenido += f"|Codigo:{codigo_barras}"
+        
+        # Generar QR
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(contenido)
+        qr.make(fit=True)
+        
+        # Crear imagen
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        # Convertir a base64
+        buffer = BytesIO()
+        img.save(buffer, format='PNG')
+        img_str = base64.b64encode(buffer.getvalue()).decode()
+        
+        return f"data:image/png;base64,{img_str}"
+    except Exception as e:
+        logger.error(f"Error generando QR para producto {producto_id}: {e}")
+        return None
+
+def generar_codigo_barras(producto_id: int, nombre: str, codigo_barras: str = None) -> str:
+    """Generar código de barras imprimible para un producto y devolverlo como base64"""
+    try:
+        # Usar el código de barras existente o generar uno basado en el ID
+        if codigo_barras and codigo_barras.strip():
+            codigo = codigo_barras
+        else:
+            # Generar código de barras basado en ID (formato: 123456789012)
+            codigo = f"{producto_id:012d}"
+        
+        # Crear código de barras Code128 (más común y legible)
+        codigo_barras_obj = barcode.get('code128', codigo, writer=ImageWriter())
+        
+        # Configurar opciones de imagen
+        options = {
+            'text_distance': 1.0,
+            'font_size': 12,
+            'module_height': 15.0,
+            'module_width': 0.2,
+            'quiet_zone': 6.0,
+            'background': 'white',
+            'foreground': 'black'
+        }
+        
+        # Generar imagen
+        buffer = BytesIO()
+        codigo_barras_obj.write(buffer, options)
+        buffer.seek(0)
+        
+        # Convertir a base64
+        img_str = base64.b64encode(buffer.getvalue()).decode()
+        
+        return f"data:image/png;base64,{img_str}"
+    except Exception as e:
+        logger.error(f"Error generando código de barras para producto {producto_id}: {e}")
+        return None
+
 # Inicializar base de datos
 def init_database():
     try:
@@ -110,6 +183,7 @@ def init_database():
                 ubicacion TEXT,
                 categoria TEXT,
                 precio_unitario REAL,
+                codigo_qr TEXT,
                 fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -131,6 +205,30 @@ def init_database():
                 FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
             )
         ''')
+        
+        # Verificar si las columnas existen, si no, agregarlas
+        cursor.execute("PRAGMA table_info(historial)")
+        columns = [column[1] for column in cursor.fetchall()]
+        
+        if 'usuario_id' not in columns:
+            cursor.execute("ALTER TABLE historial ADD COLUMN usuario_id INTEGER")
+            logger.info("Columna usuario_id agregada a tabla historial")
+        
+        if 'usuario_nombre' not in columns:
+            cursor.execute("ALTER TABLE historial ADD COLUMN usuario_nombre TEXT")
+            logger.info("Columna usuario_nombre agregada a tabla historial")
+        
+        if 'detalles' not in columns:
+            cursor.execute("ALTER TABLE historial ADD COLUMN detalles TEXT")
+            logger.info("Columna detalles agregada a tabla historial")
+        
+        # Verificar si la columna codigo_qr existe en productos, si no, agregarla
+        cursor.execute("PRAGMA table_info(productos)")
+        columnas_productos = [column[1] for column in cursor.fetchall()]
+        
+        if 'codigo_qr' not in columnas_productos:
+            cursor.execute("ALTER TABLE productos ADD COLUMN codigo_qr TEXT")
+            logger.info("Columna codigo_qr agregada a tabla productos")
         
         # Crear índices para rendimiento
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_productos_nombre ON productos(nombre)')
@@ -182,7 +280,7 @@ async def get_productos():
         cursor.execute("""
             SELECT id, codigo_barras, nombre, descripcion, cantidad, 
                    cantidad_minima, ubicacion, categoria, precio_unitario,
-                   fecha_creacion, fecha_actualizacion
+                   codigo_qr, fecha_creacion, fecha_actualizacion
             FROM productos 
             ORDER BY nombre
         """)
@@ -192,11 +290,86 @@ async def get_productos():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener productos: {str(e)}")
 
+@app.get("/api/productos/{producto_id}/qr")
+async def get_qr_producto(producto_id: int):
+    """Obtener código QR de un producto específico"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, nombre, codigo_barras, codigo_qr
+            FROM productos 
+            WHERE id = ?
+        """, (producto_id,))
+        producto = cursor.fetchone()
+        conn.close()
+        
+        if not producto:
+            raise HTTPException(status_code=404, detail="Producto no encontrado")
+        
+        # Si no tiene código QR, generarlo
+        if not producto["codigo_qr"]:
+            codigo_qr = generar_codigo_qr(producto["id"], producto["nombre"], producto["codigo_barras"])
+            if codigo_qr:
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE productos SET codigo_qr = ? WHERE id = ?
+                """, (codigo_qr, producto_id))
+                conn.commit()
+                conn.close()
+                return {"qr": codigo_qr}
+        
+        # Verificar si el QR ya tiene el formato data:image/png;base64,
+        qr_data = producto["codigo_qr"]
+        if qr_data and not qr_data.startswith("data:image/png;base64,"):
+            qr_data = f"data:image/png;base64,{qr_data}"
+        
+        return {"qr": qr_data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener QR: {str(e)}")
+
+@app.get("/api/productos/{producto_id}/barcode")
+async def get_barcode_producto(producto_id: int):
+    """Obtener código de barras de un producto específico"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, nombre, codigo_barras
+            FROM productos 
+            WHERE id = ?
+        """, (producto_id,))
+        producto = cursor.fetchone()
+        conn.close()
+        
+        if not producto:
+            raise HTTPException(status_code=404, detail="Producto no encontrado")
+        
+        # Generar código de barras
+        codigo_barras = generar_codigo_barras(
+            producto['id'], 
+            producto['nombre'], 
+            producto['codigo_barras']
+        )
+        
+        if not codigo_barras:
+            raise HTTPException(status_code=500, detail="Error generando código de barras")
+        
+        return {"barcode": codigo_barras}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener código de barras: {str(e)}")
+
 @app.post("/api/productos")
-async def crear_producto(producto: dict):
+async def crear_producto(producto: dict, request: Request):
     """Crear un nuevo producto"""
     try:
         logger.info(f"Intentando crear producto: {producto}")
+        
+        # Obtener usuario actual
+        current_user = get_current_user(request)
+        if not current_user:
+            raise HTTPException(status_code=401, detail="No autenticado")
         
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -233,7 +406,7 @@ async def crear_producto(producto: dict):
         
         logger.info(f"Datos procesados: nombre='{nombre}', cantidad={cantidad}, precio={precio_unitario}")
         
-        # Insertar producto
+        # Insertar producto primero para obtener el ID
         cursor.execute("""
             INSERT INTO productos (codigo_barras, nombre, descripcion, cantidad, 
                                   cantidad_minima, ubicacion, categoria, precio_unitario)
@@ -251,11 +424,37 @@ async def crear_producto(producto: dict):
         
         producto_id = cursor.lastrowid
         
-        # Registrar en historial
-        cursor.execute("""
-            INSERT INTO historial (accion, producto_id, cantidad_anterior, cantidad_nueva, usuario_id, usuario_nombre)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, ("crear", producto_id, 0, cantidad, "admin", "Administrador"))
+        # Si no se proporcionó código de barras, generar uno automáticamente
+        if not codigo_barras:
+            codigo_barras = f"{producto_id:012d}"
+            cursor.execute("""
+                UPDATE productos SET codigo_barras = ? WHERE id = ?
+            """, (codigo_barras, producto_id))
+            logger.info(f"Código de barras generado automáticamente: {codigo_barras}")
+        
+        # Generar código QR automáticamente
+        codigo_qr = generar_codigo_qr(producto_id, nombre, codigo_barras)
+        
+        # Actualizar el producto con el código QR generado
+        if codigo_qr:
+            cursor.execute("""
+                UPDATE productos SET codigo_qr = ? WHERE id = ?
+            """, (codigo_qr, producto_id))
+            logger.info(f"Código QR generado para producto {producto_id}")
+        
+        # Registrar en historial con usuario actual
+        try:
+            cursor.execute("""
+                INSERT INTO historial (accion, producto_id, cantidad_anterior, cantidad_nueva, usuario_id, usuario_nombre)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, ("crear", producto_id, 0, cantidad, current_user["id"], current_user["nombre_completo"]))
+        except sqlite3.OperationalError as e:
+            # Si hay error con las columnas, registrar sin ellas
+            logger.warning(f"Error registrando en historial: {e}")
+            cursor.execute("""
+                INSERT INTO historial (accion, producto_id, cantidad_anterior, cantidad_nueva)
+                VALUES (?, ?, ?, ?)
+            """, ("crear", producto_id, 0, cantidad))
         
         conn.commit()
         conn.close()
