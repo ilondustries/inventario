@@ -492,4 +492,39 @@ button[type="submit"]:hover {
         gap: 0.5rem;
         width: 100%;
     }
+}
+
+/* Modal QR específico */
+.qr-modal-content {
+    text-align: center;
+    padding: 20px 10px;
+}
+#qrProductoImg {
+    margin: 0 auto;
+    display: block;
+    max-width: 250px;
+    max-height: 250px;
+}
+
+.btn-primary {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin: 0 5px;
+}
+.btn-primary:hover {
+    background-color: #0056b3;
+}
+
+.btn-qr {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin: 0 2px;
 } 
