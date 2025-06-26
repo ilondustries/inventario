@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Almacén</title>
+    <title>Control de Herramienta Longoria Tooling</title>
     <link rel="stylesheet" href="/static/styles.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔧</text></svg>">
 </head>
 <body>
     <div class="container">
         <header>
             <div class="header-top">
-                <h1>🏪 Sistema de Almacén</h1>
+                <h1>🔧 Control de Herramienta Longoria Tooling</h1>
                 <div id="userInfo" class="user-info">
                     <!-- Información del usuario se cargará aquí -->
                 </div>
@@ -35,17 +35,12 @@
         <div class="main-content">
             <!-- Formulario para agregar/editar productos -->
             <div class="form-section">
-                <h2 id="formTitle">➕ Agregar Producto</h2>
+                <h2 id="formTitle">➕ Agregar Herramienta</h2>
                 <form id="productoForm">
                     <input type="hidden" id="productoId" value="">
                     
                     <div class="input-group">
-                        <label for="codigoBarras">Código de Barras:</label>
-                        <input type="text" id="codigoBarras" placeholder="123456789">
-                    </div>
-                    
-                    <div class="input-group">
-                        <label for="nombre">Nombre del Producto: *</label>
+                        <label for="nombre">Nombre de la Herramienta: *</label>
                         <input type="text" id="nombre" placeholder="Ej: Martillo" required>
                     </div>
                     
@@ -68,19 +63,14 @@
                     
                     <div class="input-row">
                         <div class="input-group">
-                            <label for="ubicacion">Ubicación:</label>
-                            <input type="text" id="ubicacion" placeholder="A1-B2">
-                        </div>
-                        
-                        <div class="input-group">
                             <label for="categoria">Categoría:</label>
                             <input type="text" id="categoria" placeholder="Herramientas">
                         </div>
-                    </div>
-                    
-                    <div class="input-group">
-                        <label for="precioUnitario">Precio Unitario:</label>
-                        <input type="number" id="precioUnitario" placeholder="0.00" min="0" step="0.01">
+                        
+                        <div class="input-group">
+                            <label for="precioUnitario">Precio Unitario:</label>
+                            <input type="number" id="precioUnitario" placeholder="0.00" min="0" step="0.01">
+                        </div>
                     </div>
                     
                     <div class="form-buttons">
@@ -93,9 +83,9 @@
             <!-- Lista de productos -->
             <div class="products-section">
                 <div class="section-header">
-                    <h2>📋 Inventario Actual</h2>
+                    <h2>📋 Inventario de Herramientas</h2>
                     <div class="search-bar">
-                        <input type="text" id="searchInput" placeholder="Buscar productos...">
+                        <input type="text" id="searchInput" placeholder="Buscar herramientas...">
                         <button onclick="app.buscarProductos()">🔍</button>
                     </div>
                 </div>
@@ -124,9 +114,9 @@
         <!-- Modal para mostrar QR de producto -->
         <div id="qrModal" class="modal">
             <div class="modal-content qr-modal-content">
-                <h3>Código QR del Producto</h3>
+                <h3>Código QR de la Herramienta</h3>
                 <div id="qrProductoInfo"></div>
-                <img id="qrProductoImg" src="" alt="QR del producto" style="display:block;margin:0 auto;max-width:250px;max-height:250px;"/>
+                <img id="qrProductoImg" src="" alt="QR de la herramienta" style="display:block;margin:0 auto;max-width:250px;max-height:250px;"/>
                 <div class="modal-buttons">
                     <button onclick="app.imprimirQr()" class="btn-primary">🖨️ Imprimir</button>
                     <button onclick="app.cerrarQrModal()">Cerrar</button>
