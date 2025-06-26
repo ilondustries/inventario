@@ -1,6 +1,6 @@
-# Sistema de Almacén Local
+# Control de Herramienta Longoria Tooling
 
-Sistema de gestión de inventario optimizado para uso en tablet con red local.
+Sistema de gestión de inventario de herramientas optimizado para uso en tablet con red local.
 
 ## Características
 
@@ -10,6 +10,9 @@ Sistema de gestión de inventario optimizado para uso en tablet con red local.
 - ✅ Búsqueda en tiempo real
 - ✅ Historial de acciones
 - ✅ Estadísticas del almacén
+- ✅ Códigos QR automáticos con impresión
+- ✅ Ubicaciones automáticas
+- ✅ Códigos de barras automáticos
 - ✅ Diseño moderno y intuitivo
 
 ## 📋 Requisitos
@@ -43,17 +46,23 @@ python scripts/start_server.py
 
 ## 🔧 Funcionalidades
 
-### Gestión de Productos
-- ✅ Agregar nuevos productos
-- ✅ Editar productos existentes
-- ✅ Eliminar productos
+### Gestión de Herramientas
+- ✅ Agregar nuevas herramientas
+- ✅ Editar herramientas existentes
+- ✅ Eliminar herramientas
 - ✅ Búsqueda por nombre, código, ubicación
 
 ### Inventario
 - ✅ Control de stock
 - ✅ Alertas de stock bajo
-- ✅ Ubicaciones físicas
-- ✅ Categorías de productos
+- ✅ Ubicaciones automáticas (A01, A02, B01, etc.)
+- ✅ Categorías de herramientas
+
+### Códigos QR y Barras
+- ✅ Generación automática de códigos QR
+- ✅ Códigos de barras automáticos
+- ✅ Impresión de etiquetas QR
+- ✅ Información completa en etiquetas
 
 ### Reportes
 - ✅ Historial de acciones
@@ -67,6 +76,7 @@ python scripts/start_server.py
 - Los datos se almacenan localmente
 - No requiere conexión a internet
 - Acceso solo desde la red local
+- Sistema de autenticación con sesiones
 
 ## 🆘 Soporte
 
@@ -79,11 +89,11 @@ Si encuentras algún problema:
 ## 🔮 Próximas Mejoras
 
 - [ ] Exportación a Excel/PDF
-- [ ] Códigos de barras
-- [ ] Múltiples usuarios
+- [ ] Escáner de códigos de barras
+- [ ] Múltiples usuarios con roles
 - [ ] Backup automático
 - [ ] Notificaciones push
 
 ---
 
-**Desarrollado para uso en almacenes locales** 🏪 
+**Desarrollado para Longoria Tooling** 🔧 
