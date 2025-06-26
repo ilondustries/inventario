@@ -180,12 +180,10 @@ class AlmacenApp {
     async guardarProducto() {
         const productoId = document.getElementById('productoId').value;
         const formData = {
-            codigo_barras: document.getElementById('codigoBarras').value,
             nombre: document.getElementById('nombre').value,
             descripcion: document.getElementById('descripcion').value,
             cantidad: parseInt(document.getElementById('cantidad').value) || 0,
             cantidad_minima: parseInt(document.getElementById('cantidadMinima').value) || 0,
-            ubicacion: document.getElementById('ubicacion').value,
             categoria: document.getElementById('categoria').value,
             precio_unitario: parseFloat(document.getElementById('precioUnitario').value) || 0
         };
@@ -227,18 +225,16 @@ class AlmacenApp {
         
         // Llenar formulario
         document.getElementById('productoId').value = producto.id;
-        document.getElementById('codigoBarras').value = producto.codigo_barras || '';
         document.getElementById('nombre').value = producto.nombre;
         document.getElementById('descripcion').value = producto.descripcion || '';
         document.getElementById('cantidad').value = producto.cantidad;
         document.getElementById('cantidadMinima').value = producto.cantidad_minima || '';
-        document.getElementById('ubicacion').value = producto.ubicacion || '';
         document.getElementById('categoria').value = producto.categoria || '';
         document.getElementById('precioUnitario').value = producto.precio_unitario || '';
         
         // Cambiar título y botones
-        document.getElementById('formTitle').textContent = '✏️ Editar Producto';
-        document.getElementById('submitBtn').textContent = 'Actualizar Producto';
+        document.getElementById('formTitle').textContent = '✏️ Editar Herramienta';
+        document.getElementById('submitBtn').textContent = 'Actualizar Herramienta';
         document.getElementById('cancelBtn').style.display = 'block';
         
         // Scroll al formulario
@@ -247,8 +243,8 @@ class AlmacenApp {
     
     cancelarEdicion() {
         this.limpiarFormulario();
-        document.getElementById('formTitle').textContent = '➕ Agregar Producto';
-        document.getElementById('submitBtn').textContent = 'Guardar Producto';
+        document.getElementById('formTitle').textContent = '➕ Agregar Herramienta';
+        document.getElementById('submitBtn').textContent = 'Guardar Herramienta';
         document.getElementById('cancelBtn').style.display = 'none';
     }
     
@@ -263,7 +259,7 @@ class AlmacenApp {
         if (!producto) return;
         
         this.mostrarModal(
-            `¿Estás seguro de que quieres eliminar "${producto.nombre}"?`,
+            `¿Estás seguro de que quieres eliminar la herramienta "${producto.nombre}"?`,
             productoId
         );
     }
@@ -326,7 +322,7 @@ class AlmacenApp {
         if (productos.length === 0) {
             container.innerHTML = `
                 <div class="no-products">
-                    <p>No se encontraron productos</p>
+                    <p>No se encontraron herramientas</p>
                 </div>
             `;
             return;
@@ -384,7 +380,7 @@ class AlmacenApp {
             // Mostrar información del producto
             document.getElementById('qrProductoInfo').innerHTML = `
                 <div style="margin-bottom: 15px; text-align: left;">
-                    <strong>Producto:</strong> ${producto.nombre}<br>
+                    <strong>Herramienta:</strong> ${producto.nombre}<br>
                     <strong>Código:</strong> ${producto.codigo_barras || 'N/A'}<br>
                     <strong>Ubicación:</strong> ${producto.ubicacion || 'N/A'}
                 </div>
@@ -411,7 +407,7 @@ class AlmacenApp {
             <!DOCTYPE html>
             <html>
             <head>
-                <title>Imprimir Código QR</title>
+                <title>Imprimir Código QR - Longoria Tooling</title>
                 <style>
                     body { 
                         font-family: Arial, sans-serif; 
