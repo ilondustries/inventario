@@ -120,6 +120,19 @@
         
         <!-- Notificaciones -->
         <div id="notification" class="notification"></div>
+        
+        <!-- Modal para mostrar QR de producto -->
+        <div id="qrModal" class="modal">
+            <div class="modal-content qr-modal-content">
+                <h3>Código QR del Producto</h3>
+                <div id="qrProductoInfo"></div>
+                <img id="qrProductoImg" src="" alt="QR del producto" style="display:block;margin:0 auto;max-width:250px;max-height:250px;"/>
+                <div class="modal-buttons">
+                    <button onclick="app.imprimirQr()" class="btn-primary">🖨️ Imprimir</button>
+                    <button onclick="app.cerrarQrModal()">Cerrar</button>
+                </div>
+            </div>
+        </div>
     </div>
     
     <script src="/static/app.js"></script>
