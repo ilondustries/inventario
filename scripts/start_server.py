@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script para iniciar el servidor del Sistema de Almacén
+Script para iniciar el servidor del Control de Herramienta Longoria Tooling
 """
 
 import os
@@ -61,7 +61,7 @@ def start_server():
     # Obtener IP local
     local_ip = get_local_ip()
     
-    print("🚀 Iniciando Sistema de Almacén...")
+    print("🚀 Iniciando Control de Herramienta Longoria Tooling...")
     print(f"📱 Servidor disponible en:")
     print(f"   Local: http://localhost:8000")
     print(f"   Red: http://{local_ip}:8000")
@@ -89,8 +89,8 @@ def start_server():
 
 def main():
     """Función principal"""
-    print("Sistema de Almacén - Iniciador")
-    print("=" * 40)
+    print("Control de Herramienta Longoria Tooling - Iniciador")
+    print("=" * 55)
     
     # Verificar versión de Python
     if not check_python_version():
