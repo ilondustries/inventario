@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Almacén</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-top">
+                <h1>🏪 Sistema de Almacén</h1>
+                <div id="userInfo" class="user-info">
+                    <!-- Información del usuario se cargará aquí -->
+                </div>
+            </div>
+            <div class="stats-bar">
+                <div class="stat-item">
+                    <span class="stat-label">Total Productos:</span>
+                    <span id="totalProductos" class="stat-value">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Stock Bajo:</span>
+                    <span id="stockBajo" class="stat-value warning">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Valor Total:</span>
+                    <span id="valorTotal" class="stat-value">$0.00</span>
+                </div>
+            </div>
+        </header>
+        
+        <div class="main-content">
+            <!-- Formulario para agregar/editar productos -->
+            <div class="form-section">
+                <h2 id="formTitle">➕ Agregar Producto</h2>
+                <form id="productoForm">
+                    <input type="hidden" id="productoId" value="">
+                    
+                    <div class="input-group">
+                        <label for="codigoBarras">Código de Barras:</label>
+                        <input type="text" id="codigoBarras" placeholder="123456789">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="nombre">Nombre del Producto: *</label>
+                        <input type="text" id="nombre" placeholder="Ej: Martillo" required>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="descripcion">Descripción:</label>
+                        <textarea id="descripcion" placeholder="Descripción del producto"></textarea>
+                    </div>
+                    
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="cantidad">Cantidad: *</label>
+                            <input type="number" id="cantidad" placeholder="0" min="0" required>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label for="cantidadMinima">Cantidad Mínima:</label>
+                            <input type="number" id="cantidadMinima" placeholder="5" min="0">
+                        </div>
+                    </div>
+                    
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label for="ubicacion">Ubicación:</label>
+                            <input type="text" id="ubicacion" placeholder="A1-B2">
+                        </div>
+                        
+                        <div class="input-group">
+                            <label for="categoria">Categoría:</label>
+                            <input type="text" id="categoria" placeholder="Herramientas">
+                        </div>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="precioUnitario">Precio Unitario:</label>
+                        <input type="number" id="precioUnitario" placeholder="0.00" min="0" step="0.01">
+                    </div>
+                    
+                    <div class="form-buttons">
+                        <button type="submit" id="submitBtn">Guardar Producto</button>
+                        <button type="button" id="cancelBtn" onclick="app.cancelarEdicion()" style="display: none;">Cancelar</button>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Lista de productos -->
+            <div class="products-section">
+                <div class="section-header">
+                    <h2>📋 Inventario Actual</h2>
+                    <div class="search-bar">
+                        <input type="text" id="searchInput" placeholder="Buscar productos...">
+                        <button onclick="app.buscarProductos()">🔍</button>
+                    </div>
+                </div>
+                
+                <div id="productosList" class="productos-grid">
+                    <!-- Los productos se cargarán aquí dinámicamente -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Modal de confirmación -->
+        <div id="confirmModal" class="modal">
+            <div class="modal-content">
+                <h3>Confirmar Acción</h3>
+                <p id="confirmMessage"></p>
+                <div class="modal-buttons">
+                    <button id="confirmYes" class="btn-danger">Sí, eliminar</button>
+                    <button id="confirmNo" onclick="app.cerrarModal()">Cancelar</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Notificaciones -->
+        <div id="notification" class="notification"></div>
+    </div>
+    
+    <script src="/static/app.js"></script>
+</body>
+</html> 
