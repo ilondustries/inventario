@@ -358,11 +358,104 @@ class AlmacenApp {
                 <div class="producto-actions">
                     <button onclick="app.editarProducto(${producto.id})" class="btn-edit" title="Editar">✏️</button>
                     <button onclick="app.eliminarProducto(${producto.id})" class="btn-delete" title="Eliminar">🗑️</button>
+                    <button onclick="app.mostrarQrProducto(${producto.id})" class="btn-qr" title="Ver QR">🔳 QR</button>
                 </div>
             `;
             
             container.appendChild(card);
         });
+    }
+    
+    async mostrarQrProducto(productoId) {
+        try {
+            const producto = this.productos.find(p => p.id === productoId);
+            if (!producto) return;
+            
+            // Mostrar loading
+            document.getElementById('qrProductoImg').src = '';
+            document.getElementById('qrProductoInfo').innerHTML = 'Cargando QR...';
+            document.getElementById('qrModal').style.display = 'block';
+            
+            const response = await fetch(`${this.apiUrl}/productos/${productoId}/qr`);
+            if (!response.ok) throw new Error('No se pudo obtener el QR');
+            
+            const data = await response.json();
+            
+            // Mostrar información del producto
+            document.getElementById('qrProductoInfo').innerHTML = `
+                <div style="margin-bottom: 15px; text-align: left;">
+                    <strong>Producto:</strong> ${producto.nombre}<br>
+                    <strong>Código:</strong> ${producto.codigo_barras || 'N/A'}<br>
+                    <strong>Ubicación:</strong> ${producto.ubicacion || 'N/A'}
+                </div>
+            `;
+            
+            // Mostrar QR
+            document.getElementById('qrProductoImg').src = data.qr;
+        } catch (error) {
+            console.error('Error:', error);
+            document.getElementById('qrProductoInfo').innerHTML = 'Error al cargar el QR';
+        }
+    }
+    
+    cerrarQrModal() {
+        document.getElementById('qrModal').style.display = 'none';
+    }
+    
+    imprimirQr() {
+        const printWindow = window.open('', '_blank');
+        const qrImg = document.getElementById('qrProductoImg');
+        const productoInfo = document.getElementById('qrProductoInfo').innerHTML;
+        
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Imprimir Código QR</title>
+                <style>
+                    body { 
+                        font-family: Arial, sans-serif; 
+                        margin: 20px; 
+                        text-align: center;
+                    }
+                    .qr-container {
+                        margin: 20px 0;
+                        padding: 10px;
+                        border: 1px solid #ccc;
+                        display: inline-block;
+                    }
+                    .producto-info {
+                        margin-bottom: 15px;
+                        text-align: left;
+                        font-size: 12px;
+                    }
+                    img {
+                        max-width: 100%;
+                        height: auto;
+                    }
+                    @media print {
+                        body { margin: 0; }
+                        .qr-container { border: none; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="qr-container">
+                    <div class="producto-info">${productoInfo}</div>
+                    <img src="${qrImg.src}" alt="Código QR" />
+                </div>
+                <script>
+                    window.onload = function() {
+                        window.print();
+                        window.onafterprint = function() {
+                            window.close();
+                        };
+                    };
+                </script>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
     }
     
     showNotification(message, type = 'success') {
