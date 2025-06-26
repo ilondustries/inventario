@@ -135,6 +135,21 @@ def generar_codigo_barras(producto_id: int, nombre: str, codigo_barras: str = No
         logger.error(f"Error generando código de barras para producto {producto_id}: {e}")
         return None
 
+def generar_ubicacion_automatica(producto_id: int) -> str:
+    """Generar ubicación automática para un producto basada en su ID"""
+    try:
+        # Sistema de ubicaciones: A1, A2, A3... B1, B2, B3... etc.
+        # Cada 10 productos cambia de letra (A1-A10, B1-B10, C1-C10...)
+        letra = chr(65 + ((producto_id - 1) // 10))  # A=65, B=66, C=67...
+        numero = ((producto_id - 1) % 10) + 1
+        
+        ubicacion = f"{letra}{numero:02d}"
+        logger.info(f"Ubicación automática generada para producto {producto_id}: {ubicacion}")
+        return ubicacion
+    except Exception as e:
+        logger.error(f"Error generando ubicación para producto {producto_id}: {e}")
+        return "A01"  # Ubicación por defecto
+
 # Inicializar base de datos
 def init_database():
     try:
@@ -432,6 +447,14 @@ async def crear_producto(producto: dict, request: Request):
             """, (codigo_barras, producto_id))
             logger.info(f"Código de barras generado automáticamente: {codigo_barras}")
         
+        # Si no se proporcionó ubicación, generar una automáticamente
+        if not ubicacion:
+            ubicacion = generar_ubicacion_automatica(producto_id)
+            cursor.execute("""
+                UPDATE productos SET ubicacion = ? WHERE id = ?
+            """, (ubicacion, producto_id))
+            logger.info(f"Ubicación generada automáticamente: {ubicacion}")
+        
         # Generar código QR automáticamente
         codigo_qr = generar_codigo_qr(producto_id, nombre, codigo_barras)
         
@@ -460,13 +483,13 @@ async def crear_producto(producto: dict, request: Request):
         conn.close()
         
         logger.info(f"Producto creado exitosamente con ID: {producto_id}")
-        return {"mensaje": "Producto creado exitosamente", "id": producto_id}
+        return {"mensaje": "Herramienta creada exitosamente", "id": producto_id}
     except sqlite3.IntegrityError as e:
         logger.error(f"Error de integridad: {e}")
         raise HTTPException(status_code=400, detail="El código de barras ya existe")
     except Exception as e:
         logger.error(f"Error al crear producto: {e}")
-        raise HTTPException(status_code=500, detail=f"Error al crear producto: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error al crear herramienta: {str(e)}")
 
 @app.put("/api/productos/{producto_id}")
 async def actualizar_producto(producto_id: int, producto: dict):
@@ -509,9 +532,9 @@ async def actualizar_producto(producto_id: int, producto: dict):
         conn.commit()
         conn.close()
         
-        return {"mensaje": "Producto actualizado exitosamente"}
+        return {"mensaje": "Herramienta actualizada exitosamente"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al actualizar producto: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error al actualizar herramienta: {str(e)}")
 
 @app.delete("/api/productos/{producto_id}")
 async def eliminar_producto(producto_id: int):
@@ -523,7 +546,7 @@ async def eliminar_producto(producto_id: int):
         # Verificar si existe
         cursor.execute("SELECT id FROM productos WHERE id = ?", (producto_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Producto no encontrado")
+            raise HTTPException(status_code=404, detail="Herramienta no encontrada")
         
         # Eliminar producto
         cursor.execute("DELETE FROM productos WHERE id = ?", (producto_id,))
@@ -537,9 +560,9 @@ async def eliminar_producto(producto_id: int):
         conn.commit()
         conn.close()
         
-        return {"mensaje": "Producto eliminado exitosamente"}
+        return {"mensaje": "Herramienta eliminada exitosamente"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al eliminar producto: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error al eliminar herramienta: {str(e)}")
 
 @app.get("/api/historial")
 async def get_historial():
