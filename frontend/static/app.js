@@ -21,6 +21,7 @@ class AlmacenApp {
         this.setupEventListeners();
         this.setupSearchDebounce();
         this.updateUserInfo();
+        this.initTickets();
     }
     
     async checkAuth() {
@@ -205,16 +206,19 @@ class AlmacenApp {
         
         // Configurar indicador de stock bajo como clickeable
         const stockBajoElement = document.getElementById('stockBajo');
+        const stockBajoContainer = document.getElementById('stockBajoContainer');
         stockBajoElement.textContent = stats.stock_bajo;
         
         if (stats.stock_bajo > 0) {
-            stockBajoElement.classList.add('warning', 'clickeable');
-            stockBajoElement.title = `Hacer clic para ver ${stats.stock_bajo} producto(s) con stock bajo`;
-            stockBajoElement.onclick = () => this.filtrarStockBajo();
+            stockBajoElement.classList.add('warning');
+            stockBajoContainer.classList.add('clickeable');
+            stockBajoContainer.title = `Hacer clic para ver ${stats.stock_bajo} producto(s) con stock bajo`;
+            stockBajoContainer.onclick = () => this.filtrarStockBajo();
         } else {
-            stockBajoElement.classList.remove('warning', 'clickeable');
-            stockBajoElement.title = '';
-            stockBajoElement.onclick = null;
+            stockBajoElement.classList.remove('warning');
+            stockBajoContainer.classList.remove('clickeable', 'filtro-activo');
+            stockBajoContainer.title = '';
+            stockBajoContainer.onclick = null;
         }
     }
     
@@ -234,9 +238,9 @@ class AlmacenApp {
         });
         
         // Actualizar indicador visual
-        const stockBajoElement = document.getElementById('stockBajo');
-        stockBajoElement.classList.add('filtro-activo');
-        stockBajoElement.title = 'Hacer clic para quitar filtro de stock bajo';
+        const stockBajoContainer = document.getElementById('stockBajoContainer');
+        stockBajoContainer.classList.add('filtro-activo');
+        stockBajoContainer.title = 'Hacer clic para quitar filtro de stock bajo';
         
         // Mostrar productos filtrados
         this.renderProductos(productosStockBajo);
@@ -249,9 +253,9 @@ class AlmacenApp {
         this.filtroStockBajo = false;
         
         // Restaurar indicador visual
-        const stockBajoElement = document.getElementById('stockBajo');
-        stockBajoElement.classList.remove('filtro-activo');
-        stockBajoElement.title = 'Hacer clic para ver productos con stock bajo';
+        const stockBajoContainer = document.getElementById('stockBajoContainer');
+        stockBajoContainer.classList.remove('filtro-activo');
+        stockBajoContainer.title = 'Hacer clic para ver productos con stock bajo';
         
         // Mostrar todos los productos
         this.filtrarProductos();
@@ -650,17 +654,464 @@ class AlmacenApp {
                 setTimeout(() => {
                     window.location.href = '/login';
                 }, 2000);
+                return false;
             }
+            return true;
         } catch (error) {
-            console.log('Error verificando sesión:', error);
+            console.error('Error verificando sesión:', error);
+            return false;
+        }
+    }
+    
+    // ===== SISTEMA DE TICKETS =====
+    
+    async initTickets() {
+        // Solo inicializar tickets si el usuario tiene permisos
+        if (this.currentUser && ['supervisor', 'operador', 'admin'].includes(this.currentUser.rol)) {
+            this.loadTickets();
+            this.setupTicketEventListeners();
+        } else {
+            // Ocultar sección de tickets si no tiene permisos
+            const ticketsSection = document.querySelector('.tickets-section');
+            if (ticketsSection) {
+                ticketsSection.style.display = 'none';
+            }
+        }
+    }
+    
+    setupTicketEventListeners() {
+        // Formulario de ticket
+        const ticketForm = document.getElementById('ticketForm');
+        if (ticketForm) {
+            ticketForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.crearTicket();
+            });
+        }
+        
+        // Formulario de decisión
+        const ticketDecisionForm = document.getElementById('ticketDecisionForm');
+        if (ticketDecisionForm) {
+            ticketDecisionForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.procesarDecisionTicket();
+            });
+        }
+    }
+    
+    async loadTickets() {
+        try {
+            const response = await fetch(`${this.apiUrl}/tickets`);
+            if (!response.ok) throw new Error('Error en la respuesta del servidor');
+            
+            const data = await response.json();
+            this.renderTickets(data.tickets);
+        } catch (error) {
+            console.error('Error cargando tickets:', error);
+            this.showNotification('Error al cargar tickets', 'error');
+        }
+    }
+    
+    renderTickets(tickets) {
+        const ticketsList = document.getElementById('ticketsList');
+        if (!ticketsList) return;
+        
+        if (tickets.length === 0) {
+            ticketsList.innerHTML = '<p style="text-align: center; color: #666; grid-column: 1/-1;">No hay tickets disponibles</p>';
+            return;
+        }
+        
+        ticketsList.innerHTML = tickets.map(ticket => this.renderTicketCard(ticket)).join('');
+    }
+    
+    renderTicketCard(ticket) {
+        const fecha = new Date(ticket.fecha_solicitud).toLocaleDateString('es-ES');
+        const itemsHtml = ticket.items.map(item => `
+            <div class="ticket-item">
+                <div class="ticket-item-name">${item.producto_nombre}</div>
+                <div class="ticket-item-qty">Cantidad: ${item.cantidad_solicitada}</div>
+            </div>
+        `).join('');
+        
+        const actionsHtml = this.renderTicketActions(ticket);
+        
+        return `
+            <div class="ticket-card ${ticket.estado}" onclick="app.verTicketDetalle(${ticket.id})">
+                <div class="ticket-header">
+                    <div class="ticket-numero">${ticket.numero_ticket}</div>
+                    <div class="ticket-estado ${ticket.estado}">${ticket.estado}</div>
+                </div>
+                
+                <div class="ticket-info">
+                    <p><strong>Orden:</strong> ${ticket.orden_produccion}</p>
+                    <p><strong>Solicitante:</strong> ${ticket.solicitante_nombre}</p>
+                    <p><strong>Fecha:</strong> ${fecha}</p>
+                    <p><strong>Herramientas:</strong> ${ticket.total_items || ticket.items.length}</p>
+                </div>
+                
+                <div class="ticket-items">
+                    <h4>Herramientas solicitadas:</h4>
+                    ${itemsHtml}
+                </div>
+                
+                <div class="ticket-actions">
+                    ${actionsHtml}
+                </div>
+            </div>
+        `;
+    }
+    
+    renderTicketActions(ticket) {
+        const actions = [];
+        
+        if (this.currentUser.rol === 'admin') {
+            if (ticket.estado === 'pendiente') {
+                actions.push('<button onclick="event.stopPropagation(); app.mostrarDecisionModal(' + ticket.id + ')" class="btn-primary">📋 Revisar</button>');
+            } else if (ticket.estado === 'aprobado') {
+                actions.push('<button onclick="event.stopPropagation(); app.mostrarEntregaModal(' + ticket.id + ')" class="btn-primary">📦 Entregar</button>');
+            }
+        }
+        
+        if (ticket.estado === 'pendiente' && ticket.solicitante_id === this.currentUser.id) {
+            actions.push('<button onclick="event.stopPropagation(); app.cancelarTicket(' + ticket.id + ')" class="btn-danger">❌ Cancelar</button>');
+        }
+        
+        return actions.join('');
+    }
+    
+    mostrarFormularioTicket() {
+        // Verificar permisos
+        if (!['supervisor', 'operador'].includes(this.currentUser.rol)) {
+            this.showNotification('Solo supervisores y operadores pueden crear tickets', 'error');
+            return;
+        }
+        
+        // Limpiar formulario
+        document.getElementById('ticketForm').reset();
+        document.getElementById('ticketItemsList').innerHTML = '';
+        
+        // Mostrar modal
+        document.getElementById('ticketModal').style.display = 'flex';
+        document.getElementById('ticketModalTitle').textContent = '🎫 Nuevo Ticket de Compra';
+    }
+    
+    agregarItemTicket() {
+        const itemsList = document.getElementById('ticketItemsList');
+        const itemId = Date.now(); // ID temporal
+        
+        const itemHtml = `
+            <div class="ticket-item-form" data-item-id="${itemId}">
+                <div class="input-row">
+                    <div class="input-group">
+                        <label>Herramienta:</label>
+                        <select class="producto-select" required>
+                            <option value="">Seleccionar herramienta...</option>
+                            ${this.productos.map(p => `<option value="${p.id}" data-precio="${p.precio_unitario || 0}">${p.nombre}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>Cantidad:</label>
+                        <input type="number" class="cantidad-input" min="1" value="1" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Precio Unit.:</label>
+                        <input type="number" class="precio-input" min="0" step="0.01" placeholder="0.00">
+                    </div>
+                    <button type="button" class="btn-remove-item" onclick="app.removerItemTicket(${itemId})">❌</button>
+                </div>
+            </div>
+        `;
+        
+        itemsList.insertAdjacentHTML('beforeend', itemHtml);
+        
+        // Configurar eventos para el nuevo item
+        const itemElement = itemsList.querySelector(`[data-item-id="${itemId}"]`);
+        const productoSelect = itemElement.querySelector('.producto-select');
+        const precioInput = itemElement.querySelector('.precio-input');
+        
+        productoSelect.addEventListener('change', (e) => {
+            const selectedOption = e.target.options[e.target.selectedIndex];
+            const precio = selectedOption.dataset.precio;
+            precioInput.value = precio || '';
+        });
+    }
+    
+    removerItemTicket(itemId) {
+        const itemElement = document.querySelector(`[data-item-id="${itemId}"]`);
+        if (itemElement) {
+            itemElement.remove();
+        }
+    }
+    
+    async crearTicket() {
+        try {
+            // Validar formulario
+            const ordenProduccion = document.getElementById('ordenProduccion').value.trim();
+            const justificacion = document.getElementById('justificacion').value.trim();
+            
+            if (!ordenProduccion || !justificacion) {
+                this.showNotification('Por favor complete todos los campos obligatorios', 'error');
+                return;
+            }
+            
+            // Recolectar items
+            const items = [];
+            const itemForms = document.querySelectorAll('.ticket-item-form');
+            
+            for (const form of itemForms) {
+                const productoSelect = form.querySelector('.producto-select');
+                const cantidadInput = form.querySelector('.cantidad-input');
+                const precioInput = form.querySelector('.precio-input');
+                
+                if (productoSelect.value && cantidadInput.value) {
+                    items.push({
+                        producto_id: parseInt(productoSelect.value),
+                        cantidad_solicitada: parseInt(cantidadInput.value),
+                        precio_unitario: precioInput.value ? parseFloat(precioInput.value) : null
+                    });
+                }
+            }
+            
+            if (items.length === 0) {
+                this.showNotification('Debe agregar al menos una herramienta al ticket', 'error');
+                return;
+            }
+            
+            // Crear ticket
+            const ticketData = {
+                orden_produccion: ordenProduccion,
+                justificacion: justificacion,
+                items: items
+            };
+            
+            const response = await fetch(`${this.apiUrl}/tickets`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(ticketData)
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Error al crear ticket');
+            }
+            
+            const result = await response.json();
+            this.showNotification(`Ticket ${result.numero_ticket} creado exitosamente`, 'success');
+            this.cerrarTicketModal();
+            this.loadTickets();
+            
+        } catch (error) {
+            console.error('Error creando ticket:', error);
+            this.showNotification(error.message, 'error');
+        }
+    }
+    
+    cerrarTicketModal() {
+        document.getElementById('ticketModal').style.display = 'none';
+    }
+    
+    async verTicketDetalle(ticketId) {
+        try {
+            const response = await fetch(`${this.apiUrl}/tickets/${ticketId}`);
+            if (!response.ok) throw new Error('Error al obtener ticket');
+            
+            const ticket = await response.json();
+            this.mostrarTicketDetalle(ticket);
+            
+        } catch (error) {
+            console.error('Error obteniendo ticket:', error);
+            this.showNotification('Error al obtener detalles del ticket', 'error');
+        }
+    }
+    
+    mostrarTicketDetalle(ticket) {
+        const fechaSolicitud = new Date(ticket.fecha_solicitud).toLocaleString('es-ES');
+        const fechaAprobacion = ticket.fecha_aprobacion ? new Date(ticket.fecha_aprobacion).toLocaleString('es-ES') : 'N/A';
+        const fechaEntrega = ticket.fecha_entrega ? new Date(ticket.fecha_entrega).toLocaleString('es-ES') : 'N/A';
+        
+        const itemsHtml = ticket.items.map(item => `
+            <div class="ticket-item">
+                <div class="ticket-item-name">${item.producto_nombre}</div>
+                <div class="ticket-item-qty">
+                    Solicitado: ${item.cantidad_solicitada} | 
+                    Entregado: ${item.cantidad_entregada || 0}
+                </div>
+            </div>
+        `).join('');
+        
+        const detalleInfo = document.getElementById('ticketDetalleInfo');
+        detalleInfo.innerHTML = `
+            <div class="ticket-info">
+                <p><strong>Número:</strong> ${ticket.numero_ticket}</p>
+                <p><strong>Orden de Producción:</strong> ${ticket.orden_produccion}</p>
+                <p><strong>Justificación:</strong> ${ticket.justificacion}</p>
+                <p><strong>Solicitante:</strong> ${ticket.solicitante_nombre} (${ticket.solicitante_rol})</p>
+                <p><strong>Estado:</strong> <span class="ticket-estado ${ticket.estado}">${ticket.estado}</span></p>
+                <p><strong>Fecha de Solicitud:</strong> ${fechaSolicitud}</p>
+                ${ticket.aprobador_nombre ? `<p><strong>Aprobado por:</strong> ${ticket.aprobador_nombre} (${fechaAprobacion})</p>` : ''}
+                ${ticket.comentarios_aprobador ? `<p><strong>Comentarios:</strong> ${ticket.comentarios_aprobador}</p>` : ''}
+                ${ticket.entregado_por_nombre ? `<p><strong>Entregado por:</strong> ${ticket.entregado_por_nombre} (${fechaEntrega})</p>` : ''}
+            </div>
+            
+            <div class="ticket-items">
+                <h4>Herramientas:</h4>
+                ${itemsHtml}
+            </div>
+        `;
+        
+        // Configurar botones de acción
+        const actionsContainer = document.getElementById('ticketDetalleActions');
+        actionsContainer.innerHTML = this.renderTicketActions(ticket);
+        
+        // Mostrar modal
+        document.getElementById('ticketDetalleModal').style.display = 'flex';
+    }
+    
+    mostrarDecisionModal(ticketId) {
+        this.currentTicketId = ticketId;
+        document.getElementById('ticketDecisionModal').style.display = 'flex';
+        document.getElementById('ticketDecisionForm').reset();
+    }
+    
+    cerrarDecisionModal() {
+        document.getElementById('ticketDecisionModal').style.display = 'none';
+        this.currentTicketId = null;
+    }
+    
+    async procesarDecisionTicket() {
+        try {
+            const accion = document.getElementById('decisionAccion').value;
+            const comentarios = document.getElementById('decisionComentarios').value;
+            
+            const response = await fetch(`${this.apiUrl}/tickets/${this.currentTicketId}/aprobar`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    accion: accion,
+                    comentarios: comentarios
+                })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Error al procesar ticket');
+            }
+            
+            const result = await response.json();
+            this.showNotification(`Ticket ${result.numero_ticket} ${accion} exitosamente`, 'success');
+            this.cerrarDecisionModal();
+            this.loadTickets();
+            
+        } catch (error) {
+            console.error('Error procesando ticket:', error);
+            this.showNotification(error.message, 'error');
+        }
+    }
+    
+    async mostrarEntregaModal(ticketId) {
+        try {
+            const response = await fetch(`${this.apiUrl}/tickets/${ticketId}`);
+            if (!response.ok) throw new Error('Error al obtener ticket');
+            
+            const ticket = await response.json();
+            this.currentTicketId = ticketId;
+            
+            const itemsHtml = ticket.items.map(item => `
+                <div class="entrega-item">
+                    <div class="entrega-item-header">
+                        <div class="entrega-item-name">${item.producto_nombre}</div>
+                        <div class="entrega-item-qty">Solicitado: ${item.cantidad_solicitada}</div>
+                    </div>
+                    <div class="entrega-input">
+                        <label>Cantidad a entregar:</label>
+                        <input type="number" class="entrega-cantidad" min="0" max="${item.cantidad_solicitada}" value="${item.cantidad_solicitada}" data-item-id="${item.id}">
+                        <span>/ ${item.cantidad_solicitada}</span>
+                    </div>
+                </div>
+            `).join('');
+            
+            document.getElementById('ticketEntregaItems').innerHTML = itemsHtml;
+            document.getElementById('ticketEntregaModal').style.display = 'flex';
+            
+        } catch (error) {
+            console.error('Error obteniendo ticket para entrega:', error);
+            this.showNotification('Error al cargar ticket para entrega', 'error');
+        }
+    }
+    
+    cerrarEntregaModal() {
+        document.getElementById('ticketEntregaModal').style.display = 'none';
+        this.currentTicketId = null;
+    }
+    
+    async procesarEntrega() {
+        try {
+            const items = [];
+            const entregaInputs = document.querySelectorAll('.entrega-cantidad');
+            
+            for (const input of entregaInputs) {
+                const cantidad = parseInt(input.value) || 0;
+                if (cantidad > 0) {
+                    items.push({
+                        item_id: parseInt(input.dataset.itemId),
+                        cantidad_entregada: cantidad
+                    });
+                }
+            }
+            
+            if (items.length === 0) {
+                this.showNotification('Debe especificar al menos una cantidad a entregar', 'error');
+                return;
+            }
+            
+            const response = await fetch(`${this.apiUrl}/tickets/${this.currentTicketId}/entregar`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    items: items
+                })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Error al procesar entrega');
+            }
+            
+            const result = await response.json();
+            this.showNotification(`Entrega procesada exitosamente. ${result.items_entregados} herramientas entregadas`, 'success');
+            this.cerrarEntregaModal();
+            this.loadTickets();
+            this.loadProductos(); // Recargar productos para actualizar inventario
+            
+        } catch (error) {
+            console.error('Error procesando entrega:', error);
+            this.showNotification(error.message, 'error');
+        }
+    }
+    
+    async cancelarTicket(ticketId) {
+        if (!confirm('¿Está seguro de que desea cancelar este ticket?')) {
+            return;
+        }
+        
+        try {
+            // Por ahora, solo permitimos cancelar tickets pendientes
+            this.showNotification('Función de cancelación en desarrollo', 'info');
+        } catch (error) {
+            console.error('Error cancelando ticket:', error);
+            this.showNotification('Error al cancelar ticket', 'error');
         }
     }
 }
 
-// Inicializar la aplicación cuando se carga la página
-document.addEventListener('DOMContentLoaded', () => {
-    window.app = new AlmacenApp();
-});
+// Inicializar aplicación
+const app = new AlmacenApp();
 
 // Cerrar modal al hacer clic fuera
 window.addEventListener('click', (event) => {
