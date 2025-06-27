@@ -65,22 +65,27 @@ header h1 {
     color: #dc3545;
 }
 
-.stat-value.clickeable {
+.stat-item.clickeable {
     cursor: pointer;
     transition: all 0.3s ease;
-    border-radius: 4px;
-    padding: 2px 6px;
+    border-radius: 25px;
 }
 
-.stat-value.clickeable:hover {
+.stat-item.clickeable:hover {
     background: rgba(220, 53, 69, 0.1);
-    transform: scale(1.05);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.2);
 }
 
-.stat-value.filtro-activo {
+.stat-item.filtro-activo {
     background: #dc3545;
     color: white;
-    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
+    box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4);
+}
+
+.stat-item.filtro-activo .stat-label,
+.stat-item.filtro-activo .stat-value {
+    color: white;
 }
 
 /* Contenido principal */
@@ -604,4 +609,301 @@ button[type="submit"]:hover {
 
 .search-results-message:first-child {
     margin-top: 0;
+}
+
+/* Sistema de Tickets */
+.tickets-section {
+    margin-top: 30px;
+    background: white;
+    border-radius: 15px;
+    padding: 30px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+.tickets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.ticket-card {
+    background: #f8f9fa;
+    border: 2px solid #e9ecef;
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.ticket-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    border-color: #667eea;
+}
+
+.ticket-card.pendiente {
+    border-left: 5px solid #ffc107;
+    background: linear-gradient(135deg, #fff3cd 0%, #f8f9fa 100%);
+}
+
+.ticket-card.aprobado {
+    border-left: 5px solid #28a745;
+    background: linear-gradient(135deg, #d4edda 0%, #f8f9fa 100%);
+}
+
+.ticket-card.rechazado {
+    border-left: 5px solid #dc3545;
+    background: linear-gradient(135deg, #f8d7da 0%, #f8f9fa 100%);
+}
+
+.ticket-card.entregado {
+    border-left: 5px solid #17a2b8;
+    background: linear-gradient(135deg, #d1ecf1 0%, #f8f9fa 100%);
+}
+
+.ticket-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.ticket-numero {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #333;
+}
+
+.ticket-estado {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.ticket-estado.pendiente {
+    background: #ffc107;
+    color: #212529;
+}
+
+.ticket-estado.aprobado {
+    background: #28a745;
+    color: white;
+}
+
+.ticket-estado.rechazado {
+    background: #dc3545;
+    color: white;
+}
+
+.ticket-estado.entregado {
+    background: #17a2b8;
+    color: white;
+}
+
+.ticket-info {
+    margin-bottom: 15px;
+}
+
+.ticket-info p {
+    margin: 5px 0;
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.ticket-info strong {
+    color: #333;
+}
+
+.ticket-items {
+    margin-top: 15px;
+}
+
+.ticket-items h4 {
+    color: #333;
+    margin-bottom: 10px;
+    font-size: 1rem;
+}
+
+.ticket-item {
+    background: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-bottom: 5px;
+    border-left: 3px solid #667eea;
+}
+
+.ticket-item-name {
+    font-weight: bold;
+    color: #333;
+}
+
+.ticket-item-qty {
+    color: #666;
+    font-size: 0.85rem;
+}
+
+.ticket-actions {
+    margin-top: 15px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.ticket-actions button {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    border-radius: 6px;
+}
+
+/* Modales de tickets */
+.ticket-modal-content {
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.ticket-detalle-content {
+    max-width: 700px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.ticket-entrega-content {
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.ticket-items-section {
+    margin: 20px 0;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.ticket-items-section h4 {
+    margin-bottom: 15px;
+    color: #333;
+}
+
+.ticket-item-form {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    border: 1px solid #ddd;
+}
+
+.ticket-item-form .input-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr auto;
+    gap: 10px;
+    align-items: end;
+}
+
+.ticket-item-form .input-group {
+    margin-bottom: 0;
+}
+
+.ticket-item-form label {
+    font-size: 0.9rem;
+    margin-bottom: 3px;
+}
+
+.ticket-item-form input,
+.ticket-item-form select {
+    padding: 8px 10px;
+    font-size: 0.9rem;
+}
+
+.btn-remove-item {
+    background: #dc3545;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    min-width: auto;
+}
+
+.btn-remove-item:hover {
+    background: #c82333;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+}
+
+/* Estados de entrega */
+.entrega-item {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
+}
+
+.entrega-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.entrega-item-name {
+    font-weight: bold;
+    color: #333;
+}
+
+.entrega-item-qty {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.entrega-input {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.entrega-input input {
+    width: 80px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.entrega-input span {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+/* Responsive para tickets */
+@media (max-width: 768px) {
+    .tickets-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .ticket-item-form .input-row {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    
+    .ticket-actions {
+        flex-direction: column;
+    }
+    
+    .ticket-actions button {
+        width: 100%;
+    }
 } 
