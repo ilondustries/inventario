@@ -1,179 +1,118 @@
 #!/usr/bin/env python3
 """
-Script para agregar usuarios al Sistema de Almacén
+Script para agregar usuarios de operador y supervisor al sistema
 """
 
 import sqlite3
 import hashlib
-import sys
-from pathlib import Path
+import os
 
 def hash_password(password):
     """Generar hash de contraseña"""
     return hashlib.sha256(password.encode()).hexdigest()
 
-def agregar_usuario(username, password, nombre_completo, email, rol):
-    """Agregar un nuevo usuario a la base de datos"""
-    db_path = Path(__file__).parent.parent / "data" / "almacen.db"
+def agregar_usuarios():
+    """Agregar usuarios de operador y supervisor"""
     
-    if not db_path.exists():
-        print("❌ Error: No se encontró la base de datos")
+    # Ruta de la base de datos
+    db_path = "data/almacen.db"
+    
+    if not os.path.exists(db_path):
+        print("❌ Base de datos no encontrada")
         return False
     
     try:
+        # Conectar a la base de datos
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
-        # Verificar si el usuario ya existe
-        cursor.execute("SELECT username FROM usuarios WHERE username = ?", (username,))
-        if cursor.fetchone():
-            print(f"❌ Error: El usuario '{username}' ya existe")
+        print("🔄 Agregando usuarios al sistema...")
+        
+        # Verificar si la tabla usuarios existe
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='usuarios'")
+        if not cursor.fetchone():
+            print("❌ Tabla usuarios no existe")
             return False
         
-        # Generar hash de la contraseña
-        password_hash = hash_password(password)
+        # Lista de usuarios a agregar
+        usuarios = [
+            {
+                "username": "operador",
+                "password": "oper123",
+                "nombre_completo": "Operador del Sistema",
+                "rol": "operador",
+                "email": "operador@longoria.com"
+            },
+            {
+                "username": "supervisor",
+                "password": "super123",
+                "nombre_completo": "Supervisor de Producción",
+                "rol": "supervisor",
+                "email": "supervisor@longoria.com"
+            }
+        ]
         
-        # Insertar usuario
-        cursor.execute("""
-            INSERT INTO usuarios (username, password_hash, nombre_completo, email, rol)
-            VALUES (?, ?, ?, ?, ?)
-        """, (username, password_hash, nombre_completo, email, rol))
+        usuarios_agregados = 0
         
+        for usuario in usuarios:
+            # Verificar si el usuario ya existe
+            cursor.execute("SELECT id FROM usuarios WHERE username = ?", (usuario["username"],))
+            if cursor.fetchone():
+                print(f"⚠️  Usuario {usuario['username']} ya existe, saltando...")
+                continue
+            
+            # Generar hash de la contraseña
+            password_hash = hash_password(usuario["password"])
+            
+            # Insertar usuario
+            cursor.execute("""
+                INSERT INTO usuarios (username, password_hash, nombre_completo, rol, email, fecha_creacion)
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (
+                usuario["username"],
+                password_hash,
+                usuario["nombre_completo"],
+                usuario["rol"],
+                usuario["email"]
+            ))
+            
+            usuarios_agregados += 1
+            print(f"✅ Usuario {usuario['username']} agregado exitosamente")
+            print(f"   Rol: {usuario['rol']}")
+            print(f"   Contraseña: {usuario['password']}")
+            print(f"   Nombre: {usuario['nombre_completo']}")
+            print()
+        
+        # Confirmar cambios
         conn.commit()
         conn.close()
         
-        print(f"✅ Usuario '{username}' agregado exitosamente")
-        print(f"   Nombre: {nombre_completo}")
-        print(f"   Rol: {rol}")
-        print(f"   Contraseña: {password}")
+        if usuarios_agregados > 0:
+            print(f"✅ {usuarios_agregados} usuarios agregados exitosamente")
+            print("\n📋 Resumen de credenciales:")
+            print("=" * 40)
+            for usuario in usuarios:
+                print(f"Usuario: {usuario['username']}")
+                print(f"Contraseña: {usuario['password']}")
+                print(f"Rol: {usuario['rol']}")
+                print("-" * 20)
+        else:
+            print("ℹ️  Todos los usuarios ya existían en el sistema")
+        
         return True
         
     except Exception as e:
-        print(f"❌ Error agregando usuario: {e}")
+        print(f"❌ Error agregando usuarios: {e}")
+        if 'conn' in locals():
+            conn.rollback()
+            conn.close()
         return False
 
-def listar_usuarios():
-    """Listar todos los usuarios existentes"""
-    db_path = Path(__file__).parent.parent / "data" / "almacen.db"
-    
-    if not db_path.exists():
-        print("❌ Error: No se encontró la base de datos")
-        return
-    
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT username, nombre_completo, email, rol, activo, fecha_creacion
-            FROM usuarios 
-            ORDER BY username
-        """)
-        
-        usuarios = cursor.fetchall()
-        conn.close()
-        
-        if not usuarios:
-            print("📋 No hay usuarios registrados")
-            return
-        
-        print("📋 Usuarios registrados:")
-        print("=" * 80)
-        print(f"{'Usuario':<15} {'Nombre':<25} {'Email':<25} {'Rol':<12} {'Estado':<8}")
-        print("=" * 80)
-        
-        for usuario in usuarios:
-            estado = "✅ Activo" if usuario[4] else "❌ Inactivo"
-            print(f"{usuario[0]:<15} {usuario[1]:<25} {usuario[2] or 'N/A':<25} {usuario[3]:<12} {estado:<8}")
-        
-    except Exception as e:
-        print(f"❌ Error listando usuarios: {e}")
-
-def main():
-    print("🏪 Sistema de Almacén - Gestión de Usuarios")
-    print("=" * 50)
-    
-    if len(sys.argv) > 1:
-        if sys.argv[1] == "listar":
-            listar_usuarios()
-            return
-        elif sys.argv[1] == "agregar":
-            if len(sys.argv) < 7:
-                print("Uso: python agregar_usuarios.py agregar <username> <password> <nombre> <email> <rol>")
-                return
-            
-            username = sys.argv[2]
-            password = sys.argv[3]
-            nombre = sys.argv[4]
-            email = sys.argv[5]
-            rol = sys.argv[6]
-            
-            if rol not in ['admin', 'supervisor', 'operador']:
-                print("❌ Error: Rol debe ser 'admin', 'supervisor' o 'operador'")
-                return
-            
-            agregar_usuario(username, password, nombre, email, rol)
-            return
-    
-    # Modo interactivo
-    print("1. Listar usuarios existentes")
-    print("2. Agregar nuevo usuario")
-    print("3. Agregar usuarios de turno (automático)")
-    print("4. Salir")
-    
-    opcion = input("\nSelecciona una opción (1-4): ").strip()
-    
-    if opcion == "1":
-        listar_usuarios()
-    
-    elif opcion == "2":
-        print("\n📝 Agregar nuevo usuario:")
-        username = input("Usuario: ").strip()
-        password = input("Contraseña: ").strip()
-        nombre = input("Nombre completo: ").strip()
-        email = input("Email (opcional): ").strip() or None
-        rol = input("Rol (admin/supervisor/operador): ").strip()
-        
-        if not all([username, password, nombre, rol]):
-            print("❌ Error: Todos los campos son obligatorios excepto email")
-            return
-        
-        if rol not in ['admin', 'supervisor', 'operador']:
-            print("❌ Error: Rol inválido")
-            return
-        
-        agregar_usuario(username, password, nombre, email, rol)
-    
-    elif opcion == "3":
-        print("\n🔄 Agregando usuarios de turno...")
-        
-        # Usuario 1: Supervisor de turno mañana
-        agregar_usuario(
-            "supervisor_manana",
-            "turno123",
-            "María González - Supervisor Mañana",
-            "maria.gonzalez@empresa.com",
-            "supervisor"
-        )
-        
-        # Usuario 2: Supervisor de turno tarde
-        agregar_usuario(
-            "supervisor_tarde", 
-            "turno456",
-            "Carlos Rodríguez - Supervisor Tarde",
-            "carlos.rodriguez@empresa.com",
-            "supervisor"
-        )
-        
-        print("\n✅ Usuarios de turno agregados:")
-        print("   Usuario: supervisor_manana / Contraseña: turno123")
-        print("   Usuario: supervisor_tarde / Contraseña: turno456")
-    
-    elif opcion == "4":
-        print("👋 ¡Hasta luego!")
-    
-    else:
-        print("❌ Opción inválida")
-
 if __name__ == "__main__":
-    main() 
+    print("👥 Script para Agregar Usuarios")
+    print("=" * 40)
+    
+    if agregar_usuarios():
+        print("\n✅ Proceso completado exitosamente")
+    else:
+        print("\n❌ Error en el proceso") 
