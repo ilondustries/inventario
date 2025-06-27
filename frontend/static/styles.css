@@ -76,6 +76,11 @@ header h1 {
     box-shadow: 0 10px 30px rgba(0,0,0,0.2);
 }
 
+/* Cuando el formulario está oculto, la lista ocupa todo el ancho */
+.main-content.form-hidden {
+    grid-template-columns: 1fr;
+}
+
 /* Sección de formulario */
 .form-section {
     background: #f8f9fa;
@@ -210,19 +215,29 @@ button[type="submit"]:hover {
 
 .search-bar {
     display: flex;
-    gap: 10px;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
 }
 
 .search-bar input {
-    padding: 10px;
-    border: 2px solid #ddd;
-    border-radius: 8px;
-    min-width: 200px;
+    flex: 1;
+    padding: 0.75rem;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    background: white;
+    transition: border-color 0.2s ease;
 }
 
-.search-bar button {
-    background: #667eea;
-    color: white;
+.search-bar input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.search-bar input::placeholder {
+    color: #6c757d;
+    font-style: italic;
 }
 
 /* Grid de productos */
@@ -231,6 +246,24 @@ button[type="submit"]:hover {
     gap: 15px;
     max-height: 600px;
     overflow-y: auto;
+}
+
+/* Cuando el formulario está oculto, usar más columnas para aprovechar el espacio */
+.main-content.form-hidden .productos-grid {
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+}
+
+/* Grid responsivo para diferentes tamaños de pantalla */
+@media (max-width: 1200px) {
+    .main-content.form-hidden .productos-grid {
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .main-content.form-hidden .productos-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .producto-card {
@@ -527,4 +560,30 @@ button[type="submit"]:hover {
     border-radius: 4px;
     cursor: pointer;
     margin: 0 2px;
+}
+
+/* Estilos para mensaje de resultados de búsqueda */
+.search-results-message {
+    grid-column: 1 / -1;
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 1rem;
+    margin-top: 1rem;
+    text-align: center;
+    color: #495057;
+    font-size: 0.9rem;
+}
+
+.search-results-message p {
+    margin: 0.25rem 0;
+}
+
+.search-results-message strong {
+    color: #212529;
+    font-weight: 600;
+}
+
+.search-results-message:first-child {
+    margin-top: 0;
 } 
