@@ -251,6 +251,11 @@ def init_database():
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_historial_producto ON historial(producto_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_usuarios_username ON usuarios(username)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_sesiones_token ON sesiones(token)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_tickets_solicitante ON tickets_compra(solicitante_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_tickets_estado ON tickets_compra(estado)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_tickets_fecha ON tickets_compra(fecha_solicitud)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_ticket_items_ticket ON ticket_items(ticket_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_ticket_items_producto ON ticket_items(producto_id)')
         
         # Crear usuario administrador por defecto si no existe
         cursor.execute("SELECT COUNT(*) FROM usuarios WHERE username = 'admin'")
@@ -262,6 +267,46 @@ def init_database():
                 VALUES (?, ?, ?, ?, ?)
             """, ('admin', password_hash, 'Administrador del Sistema', 'admin@empresa.com', 'admin'))
             logger.info("Usuario administrador creado: admin / admin123")
+        
+        # Crear tabla de tickets de compra
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS tickets_compra (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                numero_ticket TEXT UNIQUE NOT NULL,
+                orden_produccion TEXT NOT NULL,
+                justificacion TEXT NOT NULL,
+                solicitante_id INTEGER NOT NULL,
+                solicitante_nombre TEXT NOT NULL,
+                solicitante_rol TEXT NOT NULL,
+                estado TEXT DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'aprobado', 'rechazado', 'entregado')),
+                fecha_solicitud TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                fecha_aprobacion TIMESTAMP,
+                aprobador_id INTEGER,
+                aprobador_nombre TEXT,
+                comentarios_aprobador TEXT,
+                fecha_entrega TIMESTAMP,
+                entregado_por_id INTEGER,
+                entregado_por_nombre TEXT,
+                FOREIGN KEY (solicitante_id) REFERENCES usuarios (id),
+                FOREIGN KEY (aprobador_id) REFERENCES usuarios (id),
+                FOREIGN KEY (entregado_por_id) REFERENCES usuarios (id)
+            )
+        ''')
+        
+        # Crear tabla de items del ticket
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ticket_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticket_id INTEGER NOT NULL,
+                producto_id INTEGER NOT NULL,
+                producto_nombre TEXT NOT NULL,
+                cantidad_solicitada INTEGER NOT NULL,
+                cantidad_entregada INTEGER DEFAULT 0,
+                precio_unitario REAL,
+                FOREIGN KEY (ticket_id) REFERENCES tickets_compra (id) ON DELETE CASCADE,
+                FOREIGN KEY (producto_id) REFERENCES productos (id)
+            )
+        ''')
         
         conn.commit()
         conn.close()
@@ -374,6 +419,20 @@ async def get_barcode_producto(producto_id: int):
         return {"barcode": codigo_barras}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener código de barras: {str(e)}")
+
+def require_supervisor_or_operator(user):
+    """Verificar que el usuario sea supervisor u operador"""
+    if not user:
+        raise HTTPException(status_code=401, detail="Autenticación requerida")
+    
+    if user["rol"] not in ["supervisor", "operador"]:
+        logger.warning(f"Usuario {user['username']} intentó acceder a función de ticket sin permisos")
+        raise HTTPException(
+            status_code=403, 
+            detail="Acceso denegado. Solo supervisores y operadores pueden solicitar herramientas."
+        )
+    
+    return user
 
 def require_admin(user):
     """Verificar que el usuario sea administrador"""
@@ -981,6 +1040,459 @@ async def check_auth(request: Request):
     result = {"autenticado": user is not None, "usuario": user}
     logger.info(f"Check auth result: {result}")
     return result
+
+def generar_numero_ticket() -> str:
+    """Generar número único de ticket"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Obtener el último ticket para generar número secuencial
+        cursor.execute("SELECT MAX(CAST(SUBSTR(numero_ticket, 6) AS INTEGER)) FROM tickets_compra")
+        ultimo_numero = cursor.fetchone()[0]
+        
+        if ultimo_numero is None:
+            ultimo_numero = 0
+        
+        nuevo_numero = ultimo_numero + 1
+        numero_ticket = f"TICK-{nuevo_numero:06d}"
+        
+        conn.close()
+        return numero_ticket
+    except Exception as e:
+        logger.error(f"Error generando número de ticket: {e}")
+        # Fallback con timestamp
+        import time
+        return f"TICK-{int(time.time())}"
+
+@app.post("/api/tickets")
+async def crear_ticket_compra(ticket: dict, request: Request):
+    """Crear un nuevo ticket de compra - Solo supervisores y operadores"""
+    try:
+        # Verificar que el usuario sea supervisor u operador
+        current_user = get_current_user(request)
+        require_supervisor_or_operator(current_user)
+        
+        logger.info(f"Usuario {current_user['username']} creando ticket de compra")
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Validar datos del ticket
+        if not ticket.get("orden_produccion"):
+            raise HTTPException(status_code=400, detail="Orden de producción es obligatoria")
+        
+        if not ticket.get("justificacion"):
+            raise HTTPException(status_code=400, detail="Justificación es obligatoria")
+        
+        # Validar items del ticket
+        items = ticket.get("items", [])
+        if not items or len(items) == 0:
+            raise HTTPException(status_code=400, detail="El ticket debe contener al menos una herramienta")
+        
+        # Verificar que todos los productos existen
+        productos_ids = [item["producto_id"] for item in items]
+        placeholders = ','.join(['?' for _ in productos_ids])
+        cursor.execute(f"SELECT id, nombre FROM productos WHERE id IN ({placeholders})", productos_ids)
+        productos_existentes = {row["id"]: row["nombre"] for row in cursor.fetchall()}
+        
+        if len(productos_existentes) != len(productos_ids):
+            raise HTTPException(status_code=400, detail="Uno o más productos no existen")
+        
+        # Generar número de ticket
+        numero_ticket = generar_numero_ticket()
+        
+        # Crear ticket principal
+        cursor.execute("""
+            INSERT INTO tickets_compra (
+                numero_ticket, orden_produccion, justificacion, solicitante_id, solicitante_nombre, solicitante_rol
+            ) VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            numero_ticket,
+            ticket["orden_produccion"],
+            ticket["justificacion"],
+            current_user["id"],
+            current_user["nombre_completo"],
+            current_user["rol"]
+        ))
+        
+        ticket_id = cursor.lastrowid
+        
+        # Crear items del ticket
+        for item in items:
+            cursor.execute("""
+                INSERT INTO ticket_items (
+                    ticket_id, producto_id, producto_nombre, cantidad_solicitada, precio_unitario
+                ) VALUES (?, ?, ?, ?, ?)
+            """, (
+                ticket_id,
+                item["producto_id"],
+                productos_existentes[item["producto_id"]],
+                item["cantidad_solicitada"],
+                item.get("precio_unitario")
+            ))
+            
+            # Registrar en historial
+            try:
+                cursor.execute("""
+                    INSERT INTO historial (accion, producto_id, usuario_id, usuario_nombre, detalles)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (
+                    "solicitud_compra",
+                    item["producto_id"],
+                    current_user["id"],
+                    current_user["nombre_completo"],
+                    f"Ticket {numero_ticket} - Orden: {ticket['orden_produccion']} - Cantidad: {item['cantidad_solicitada']}"
+                ))
+            except sqlite3.OperationalError as e:
+                logger.warning(f"Error registrando en historial: {e}")
+        
+        conn.commit()
+        conn.close()
+        
+        logger.info(f"Ticket {numero_ticket} creado exitosamente por {current_user['username']} con {len(items)} herramientas")
+        return {
+            "mensaje": "Ticket de compra creado exitosamente",
+            "numero_ticket": numero_ticket,
+            "total_herramientas": len(items)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error al crear ticket de compra: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al crear ticket: {str(e)}")
+
+@app.get("/api/tickets")
+async def listar_tickets(request: Request, estado: str = None, limit: int = 50):
+    """Listar tickets de compra - Filtrado por rol del usuario"""
+    try:
+        current_user = get_current_user(request)
+        require_auth(current_user)
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Construir query base
+        query = """
+            SELECT 
+                t.id, t.numero_ticket, t.orden_produccion, t.justificacion,
+                t.solicitante_nombre, t.solicitante_rol, t.estado,
+                t.fecha_solicitud, t.fecha_aprobacion, t.aprobador_nombre,
+                t.comentarios_aprobador, t.fecha_entrega, t.entregado_por_nombre,
+                COUNT(ti.id) as total_items,
+                SUM(ti.cantidad_solicitada) as total_cantidad_solicitada
+            FROM tickets_compra t
+            LEFT JOIN ticket_items ti ON t.id = ti.ticket_id
+        """
+        
+        params = []
+        where_conditions = []
+        
+        # Filtrar por rol del usuario
+        if current_user["rol"] == "admin":
+            # Administradores ven todos los tickets
+            pass
+        elif current_user["rol"] in ["supervisor", "operador"]:
+            # Supervisores y operadores solo ven sus propios tickets
+            where_conditions.append("t.solicitante_id = ?")
+            params.append(current_user["id"])
+        
+        # Filtrar por estado si se especifica
+        if estado:
+            where_conditions.append("t.estado = ?")
+            params.append(estado)
+        
+        if where_conditions:
+            query += " WHERE " + " AND ".join(where_conditions)
+        
+        query += " GROUP BY t.id ORDER BY t.fecha_solicitud DESC LIMIT ?"
+        params.append(limit)
+        
+        cursor.execute(query, params)
+        tickets = [dict(row) for row in cursor.fetchall()]
+        
+        # Obtener items de cada ticket
+        for ticket in tickets:
+            cursor.execute("""
+                SELECT ti.id, ti.producto_id, ti.producto_nombre, ti.cantidad_solicitada, 
+                       ti.cantidad_entregada, ti.precio_unitario
+                FROM ticket_items ti
+                WHERE ti.ticket_id = ?
+                ORDER BY ti.producto_nombre
+            """, (ticket["id"],))
+            ticket["items"] = [dict(item) for item in cursor.fetchall()]
+        
+        conn.close()
+        
+        return {
+            "tickets": tickets,
+            "total": len(tickets)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error al listar tickets: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al obtener tickets: {str(e)}")
+
+@app.put("/api/tickets/{ticket_id}/aprobar")
+async def aprobar_ticket(ticket_id: int, decision: dict, request: Request):
+    """Aprobar o rechazar un ticket - Solo administradores"""
+    try:
+        current_user = get_current_user(request)
+        require_admin(current_user)
+        
+        accion = decision.get("accion")  # "aprobar" o "rechazar"
+        comentarios = decision.get("comentarios", "")
+        
+        if accion not in ["aprobar", "rechazar"]:
+            raise HTTPException(status_code=400, detail="Acción debe ser 'aprobar' o 'rechazar'")
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Verificar que el ticket existe y está pendiente
+        cursor.execute("""
+            SELECT id, numero_ticket, estado, solicitante_nombre
+            FROM tickets_compra 
+            WHERE id = ?
+        """, (ticket_id,))
+        
+        ticket = cursor.fetchone()
+        if not ticket:
+            raise HTTPException(status_code=404, detail="Ticket no encontrado")
+        
+        # Convertir a diccionario
+        ticket = dict(ticket)
+        
+        if ticket["estado"] != "pendiente":
+            raise HTTPException(status_code=400, detail="Solo se pueden aprobar/rechazar tickets pendientes")
+        
+        # Actualizar estado del ticket
+        nuevo_estado = "aprobado" if accion == "aprobar" else "rechazado"
+        fecha_aprobacion = datetime.now().isoformat() if accion == "aprobar" else None
+        
+        cursor.execute("""
+            UPDATE tickets_compra 
+            SET estado = ?, fecha_aprobacion = ?, aprobador_id = ?, aprobador_nombre = ?, comentarios_aprobador = ?
+            WHERE id = ?
+        """, (
+            nuevo_estado,
+            fecha_aprobacion,
+            current_user["id"],
+            current_user["nombre_completo"],
+            comentarios,
+            ticket_id
+        ))
+        
+        # Registrar en historial
+        try:
+            cursor.execute("""
+                INSERT INTO historial (accion, usuario_id, usuario_nombre, detalles)
+                VALUES (?, ?, ?, ?)
+            """, (
+                f"ticket_{accion}",
+                current_user["id"],
+                current_user["nombre_completo"],
+                f"Ticket {ticket['numero_ticket']} {accion} - Comentarios: {comentarios}"
+            ))
+        except sqlite3.OperationalError as e:
+            logger.warning(f"Error registrando en historial: {e}")
+        
+        conn.commit()
+        conn.close()
+        
+        logger.info(f"Ticket {ticket['numero_ticket']} {accion} por {current_user['username']}")
+        return {
+            "mensaje": f"Ticket {accion} exitosamente",
+            "numero_ticket": ticket["numero_ticket"],
+            "estado": nuevo_estado
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error al {accion} ticket: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al procesar ticket: {str(e)}")
+
+@app.put("/api/tickets/{ticket_id}/entregar")
+async def entregar_ticket(ticket_id: int, entrega: dict, request: Request):
+    """Entregar herramientas de un ticket aprobado - Solo administradores"""
+    try:
+        current_user = get_current_user(request)
+        require_admin(current_user)
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Verificar que el ticket existe y está aprobado
+        cursor.execute("""
+            SELECT id, numero_ticket, estado, solicitante_nombre
+            FROM tickets_compra 
+            WHERE id = ?
+        """, (ticket_id,))
+        
+        ticket = cursor.fetchone()
+        if not ticket:
+            raise HTTPException(status_code=404, detail="Ticket no encontrado")
+        
+        if ticket["estado"] != "aprobado":
+            raise HTTPException(status_code=400, detail="Solo se pueden entregar tickets aprobados")
+        
+        # Obtener items del ticket
+        cursor.execute("""
+            SELECT ti.id, ti.producto_id, ti.producto_nombre, ti.cantidad_solicitada, ti.cantidad_entregada
+            FROM ticket_items ti
+            WHERE ti.ticket_id = ?
+        """, (ticket_id,))
+        
+        items = [dict(item) for item in cursor.fetchall()]
+        
+        # Procesar entregas
+        items_entregados = entrega.get("items", [])
+        for item_entrega in items_entregados:
+            item_id = item_entrega.get("item_id")
+            cantidad_entregada = item_entrega.get("cantidad_entregada", 0)
+            
+            # Encontrar el item correspondiente
+            item_ticket = next((item for item in items if item["id"] == item_id), None)
+            if not item_ticket:
+                continue
+            
+            # Verificar que no se entregue más de lo solicitado
+            if cantidad_entregada > item_ticket["cantidad_solicitada"]:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"No se puede entregar más de lo solicitado para {item_ticket['producto_nombre']}"
+                )
+            
+            # Actualizar cantidad entregada
+            cursor.execute("""
+                UPDATE ticket_items 
+                SET cantidad_entregada = ?
+                WHERE id = ?
+            """, (cantidad_entregada, item_id))
+            
+            # Actualizar inventario si se entregó algo
+            if cantidad_entregada > 0:
+                cursor.execute("""
+                    UPDATE productos 
+                    SET cantidad = cantidad - ?
+                    WHERE id = ?
+                """, (cantidad_entregada, item_ticket["producto_id"]))
+                
+                # Registrar en historial
+                try:
+                    cursor.execute("""
+                        INSERT INTO historial (accion, producto_id, usuario_id, usuario_nombre, detalles)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (
+                        "entrega_ticket",
+                        item_ticket["producto_id"],
+                        current_user["id"],
+                        current_user["nombre_completo"],
+                        f"Ticket {ticket['numero_ticket']} - Entregado: {cantidad_entregada} unidades"
+                    ))
+                except sqlite3.OperationalError as e:
+                    logger.warning(f"Error registrando en historial: {e}")
+        
+        # Verificar si todos los items fueron entregados
+        cursor.execute("""
+            SELECT 
+                SUM(cantidad_solicitada) as total_solicitado,
+                SUM(cantidad_entregada) as total_entregado
+            FROM ticket_items 
+            WHERE ticket_id = ?
+        """, (ticket_id,))
+        
+        totales = dict(cursor.fetchone())
+        nuevo_estado = "entregado" if totales["total_entregado"] >= totales["total_solicitado"] else "aprobado"
+        
+        # Actualizar estado del ticket
+        fecha_entrega = datetime.now().isoformat() if nuevo_estado == "entregado" else None
+        
+        cursor.execute("""
+            UPDATE tickets_compra 
+            SET estado = ?, fecha_entrega = ?, entregado_por_id = ?, entregado_por_nombre = ?
+            WHERE id = ?
+        """, (
+            nuevo_estado,
+            fecha_entrega,
+            current_user["id"],
+            current_user["nombre_completo"],
+            ticket_id
+        ))
+        
+        conn.commit()
+        conn.close()
+        
+        logger.info(f"Ticket {ticket['numero_ticket']} entregado por {current_user['username']}")
+        return {
+            "mensaje": "Entrega procesada exitosamente",
+            "numero_ticket": ticket["numero_ticket"],
+            "estado": nuevo_estado,
+            "items_entregados": len(items_entregados)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error al entregar ticket: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al procesar entrega: {str(e)}")
+
+@app.get("/api/tickets/{ticket_id}")
+async def obtener_ticket(ticket_id: int, request: Request):
+    """Obtener un ticket específico por ID"""
+    try:
+        current_user = get_current_user(request)
+        require_auth(current_user)
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Obtener ticket principal
+        cursor.execute("""
+            SELECT 
+                t.id, t.numero_ticket, t.orden_produccion, t.justificacion,
+                t.solicitante_nombre, t.solicitante_rol, t.estado,
+                t.fecha_solicitud, t.fecha_aprobacion, t.aprobador_nombre,
+                t.comentarios_aprobador, t.fecha_entrega, t.entregado_por_nombre
+            FROM tickets_compra t
+            WHERE t.id = ?
+        """, (ticket_id,))
+        
+        ticket = cursor.fetchone()
+        if not ticket:
+            raise HTTPException(status_code=404, detail="Ticket no encontrado")
+        
+        # Convertir a diccionario
+        ticket = dict(ticket)
+        
+        # Verificar permisos
+        if current_user["rol"] not in ["admin"] and ticket["solicitante_id"] != current_user["id"]:
+            raise HTTPException(status_code=403, detail="No tienes permisos para ver este ticket")
+        
+        # Obtener items del ticket
+        cursor.execute("""
+            SELECT ti.id, ti.producto_id, ti.producto_nombre, ti.cantidad_solicitada, 
+                   ti.cantidad_entregada, ti.precio_unitario
+            FROM ticket_items ti
+            WHERE ti.ticket_id = ?
+            ORDER BY ti.producto_nombre
+        """, (ticket_id,))
+        
+        ticket["items"] = [dict(item) for item in cursor.fetchall()]
+        
+        conn.close()
+        
+        return ticket
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error al obtener ticket {ticket_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al obtener ticket: {str(e)}")
 
 # Inicializar base de datos al arrancar
 @app.on_event("startup")
