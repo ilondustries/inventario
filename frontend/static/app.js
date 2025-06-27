@@ -4,6 +4,7 @@ class AlmacenApp {
         this.productos = [];
         this.filtroActual = '';
         this.currentUser = null;
+        this.filtroStockBajo = false;
         this.init();
     }
     
@@ -131,7 +132,13 @@ class AlmacenApp {
                 e.preventDefault();
                 searchInput.value = '';
                 this.filtroActual = '';
-                this.filtrarProductos();
+                
+                // Si el filtro de stock bajo está activo, también limpiarlo
+                if (this.filtroStockBajo) {
+                    this.desactivarFiltroStockBajo();
+                } else {
+                    this.filtrarProductos();
+                }
             }
         });
         
@@ -194,16 +201,63 @@ class AlmacenApp {
     
     updateEstadisticas(stats) {
         document.getElementById('totalProductos').textContent = stats.total_productos;
-        document.getElementById('stockBajo').textContent = stats.stock_bajo;
         document.getElementById('valorTotal').textContent = `$${stats.valor_total.toFixed(2)}`;
         
-        // Resaltar stock bajo
+        // Configurar indicador de stock bajo como clickeable
         const stockBajoElement = document.getElementById('stockBajo');
+        stockBajoElement.textContent = stats.stock_bajo;
+        
         if (stats.stock_bajo > 0) {
-            stockBajoElement.classList.add('warning');
+            stockBajoElement.classList.add('warning', 'clickeable');
+            stockBajoElement.title = `Hacer clic para ver ${stats.stock_bajo} producto(s) con stock bajo`;
+            stockBajoElement.onclick = () => this.filtrarStockBajo();
         } else {
-            stockBajoElement.classList.remove('warning');
+            stockBajoElement.classList.remove('warning', 'clickeable');
+            stockBajoElement.title = '';
+            stockBajoElement.onclick = null;
         }
+    }
+    
+    filtrarStockBajo() {
+        // Si ya está activo el filtro de stock bajo, desactivarlo
+        if (this.filtroStockBajo) {
+            this.desactivarFiltroStockBajo();
+            return;
+        }
+        
+        // Activar filtro de stock bajo
+        this.filtroStockBajo = true;
+        
+        // Filtrar productos con stock bajo
+        const productosStockBajo = this.productos.filter(producto => {
+            return producto.cantidad_minima > 0 && producto.cantidad <= producto.cantidad_minima;
+        });
+        
+        // Actualizar indicador visual
+        const stockBajoElement = document.getElementById('stockBajo');
+        stockBajoElement.classList.add('filtro-activo');
+        stockBajoElement.title = 'Hacer clic para quitar filtro de stock bajo';
+        
+        // Mostrar productos filtrados
+        this.renderProductos(productosStockBajo);
+        
+        // Mostrar notificación
+        this.showNotification(`Mostrando ${productosStockBajo.length} producto(s) con stock bajo`, 'warning');
+    }
+    
+    desactivarFiltroStockBajo() {
+        this.filtroStockBajo = false;
+        
+        // Restaurar indicador visual
+        const stockBajoElement = document.getElementById('stockBajo');
+        stockBajoElement.classList.remove('filtro-activo');
+        stockBajoElement.title = 'Hacer clic para ver productos con stock bajo';
+        
+        // Mostrar todos los productos
+        this.filtrarProductos();
+        
+        // Mostrar notificación
+        this.showNotification('Filtro de stock bajo desactivado', 'info');
     }
     
     async guardarProducto() {
@@ -326,14 +380,24 @@ class AlmacenApp {
     }
     
     filtrarProductos() {
-        const productosFiltrados = this.productos.filter(producto => {
-            if (!this.filtroActual) return true;
-            
-            return producto.nombre.toLowerCase().includes(this.filtroActual) ||
-                   (producto.codigo_barras && producto.codigo_barras.toLowerCase().includes(this.filtroActual)) ||
-                   (producto.ubicacion && producto.ubicacion.toLowerCase().includes(this.filtroActual)) ||
-                   (producto.categoria && producto.categoria.toLowerCase().includes(this.filtroActual));
-        });
+        let productosFiltrados = this.productos;
+        
+        // Aplicar filtro de stock bajo si está activo
+        if (this.filtroStockBajo) {
+            productosFiltrados = productosFiltrados.filter(producto => {
+                return producto.cantidad_minima > 0 && producto.cantidad <= producto.cantidad_minima;
+            });
+        }
+        
+        // Aplicar filtro de búsqueda si hay término de búsqueda
+        if (this.filtroActual && this.filtroActual.trim() !== '') {
+            productosFiltrados = productosFiltrados.filter(producto => {
+                return producto.nombre.toLowerCase().includes(this.filtroActual) ||
+                       (producto.codigo_barras && producto.codigo_barras.toLowerCase().includes(this.filtroActual)) ||
+                       (producto.ubicacion && producto.ubicacion.toLowerCase().includes(this.filtroActual)) ||
+                       (producto.categoria && producto.categoria.toLowerCase().includes(this.filtroActual));
+            });
+        }
         
         this.renderProductos(productosFiltrados);
     }
@@ -403,29 +467,45 @@ class AlmacenApp {
         const mensajeElement = document.createElement('div');
         mensajeElement.className = 'search-results-message';
         
-        if (this.filtroActual && this.filtroActual.trim() !== '') {
-            // Hay un filtro activo
+        // Determinar qué mensaje mostrar
+        let mensajeHTML = '';
+        
+        if (this.filtroStockBajo && this.filtroActual && this.filtroActual.trim() !== '') {
+            // Ambos filtros activos
+            mensajeHTML = `
+                <p>🔍 Se encontraron <strong>${productosMostrados}</strong> de <strong>${totalProductos}</strong> herramientas con stock bajo que coinciden con "<strong>${this.filtroActual}</strong>"</p>
+                <p>⚠️ Filtro de stock bajo activo</p>
+            `;
+        } else if (this.filtroStockBajo) {
+            // Solo filtro de stock bajo activo
+            mensajeHTML = `
+                <p>⚠️ Mostrando <strong>${productosMostrados}</strong> de <strong>${totalProductos}</strong> herramientas con stock bajo</p>
+                <p>💡 Hacer clic en "Stock Bajo" en la barra superior para quitar el filtro</p>
+            `;
+        } else if (this.filtroActual && this.filtroActual.trim() !== '') {
+            // Solo búsqueda activa
             if (productosMostrados === 0) {
-                mensajeElement.innerHTML = `
+                mensajeHTML = `
                     <p>🔍 No se encontraron herramientas que coincidan con "<strong>${this.filtroActual}</strong>"</p>
                     <p>Total de herramientas en inventario: <strong>${totalProductos}</strong></p>
                 `;
             } else if (productosMostrados === totalProductos) {
-                mensajeElement.innerHTML = `
+                mensajeHTML = `
                     <p>🔍 Mostrando todas las <strong>${productosMostrados}</strong> herramientas</p>
                 `;
             } else {
-                mensajeElement.innerHTML = `
+                mensajeHTML = `
                     <p>🔍 Se encontraron <strong>${productosMostrados}</strong> de <strong>${totalProductos}</strong> herramientas para "<strong>${this.filtroActual}</strong>"</p>
                 `;
             }
         } else {
-            // No hay filtro activo
-            mensajeElement.innerHTML = `
+            // Sin filtros activos
+            mensajeHTML = `
                 <p>📋 Mostrando <strong>${productosMostrados}</strong> herramientas del inventario</p>
             `;
         }
         
+        mensajeElement.innerHTML = mensajeHTML;
         container.appendChild(mensajeElement);
     }
     
