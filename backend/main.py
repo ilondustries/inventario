@@ -375,16 +375,35 @@ async def get_barcode_producto(producto_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener código de barras: {str(e)}")
 
+def require_admin(user):
+    """Verificar que el usuario sea administrador"""
+    if not user:
+        raise HTTPException(status_code=401, detail="Autenticación requerida")
+    
+    if user["rol"] != "admin":
+        logger.warning(f"Usuario {user['username']} intentó acceder a función de administrador sin permisos")
+        raise HTTPException(
+            status_code=403, 
+            detail="Acceso denegado. Solo administradores pueden realizar esta acción."
+        )
+    
+    return user
+
+def require_auth(user):
+    """Verificar que el usuario esté autenticado"""
+    if not user:
+        raise HTTPException(status_code=401, detail="Autenticación requerida")
+    return user
+
 @app.post("/api/productos")
 async def crear_producto(producto: dict, request: Request):
-    """Crear un nuevo producto"""
+    """Crear un nuevo producto - Solo administradores"""
     try:
-        logger.info(f"Intentando crear producto: {producto}")
-        
-        # Obtener usuario actual
+        # Verificar que el usuario sea administrador
         current_user = get_current_user(request)
-        if not current_user:
-            raise HTTPException(status_code=401, detail="No autenticado")
+        require_admin(current_user)
+        
+        logger.info(f"Administrador {current_user['username']} creando producto: {producto}")
         
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -492,9 +511,15 @@ async def crear_producto(producto: dict, request: Request):
         raise HTTPException(status_code=500, detail=f"Error al crear herramienta: {str(e)}")
 
 @app.put("/api/productos/{producto_id}")
-async def actualizar_producto(producto_id: int, producto: dict):
-    """Actualizar un producto existente"""
+async def actualizar_producto(producto_id: int, producto: dict, request: Request):
+    """Actualizar un producto existente - Solo administradores"""
     try:
+        # Verificar que el usuario sea administrador
+        current_user = get_current_user(request)
+        require_admin(current_user)
+        
+        logger.info(f"Administrador {current_user['username']} actualizando producto {producto_id}")
+        
         conn = get_db_connection()
         cursor = conn.cursor()
         
@@ -527,7 +552,7 @@ async def actualizar_producto(producto_id: int, producto: dict):
         cursor.execute("""
             INSERT INTO historial (accion, producto_id, cantidad_anterior, cantidad_nueva, usuario_id, usuario_nombre)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, ("actualizar", producto_id, cantidad_anterior, producto.get("cantidad", 0), "admin", "Administrador"))
+        """, ("actualizar", producto_id, cantidad_anterior, producto.get("cantidad", 0), current_user["id"], current_user["nombre_completo"]))
         
         conn.commit()
         conn.close()
@@ -537,9 +562,15 @@ async def actualizar_producto(producto_id: int, producto: dict):
         raise HTTPException(status_code=500, detail=f"Error al actualizar herramienta: {str(e)}")
 
 @app.delete("/api/productos/{producto_id}")
-async def eliminar_producto(producto_id: int):
-    """Eliminar un producto"""
+async def eliminar_producto(producto_id: int, request: Request):
+    """Eliminar un producto - Solo administradores"""
     try:
+        # Verificar que el usuario sea administrador
+        current_user = get_current_user(request)
+        require_admin(current_user)
+        
+        logger.info(f"Administrador {current_user['username']} eliminando producto {producto_id}")
+        
         conn = get_db_connection()
         cursor = conn.cursor()
         
@@ -555,7 +586,7 @@ async def eliminar_producto(producto_id: int):
         cursor.execute("""
             INSERT INTO historial (accion, producto_id, cantidad_anterior, cantidad_nueva, usuario_id, usuario_nombre)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, ("eliminar", producto_id, 0, 0, "admin", "Administrador"))
+        """, ("eliminar", producto_id, 0, 0, current_user["id"], current_user["nombre_completo"]))
         
         conn.commit()
         conn.close()
