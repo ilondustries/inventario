@@ -157,3 +157,128 @@ Para problemas con usuarios o acceso:
 ---
 
 **Última actualización**: Junio 2025 
+
+# Guía de Usuarios - Control de Herramienta Longoria Tooling
+
+## Roles de Usuario
+
+El sistema cuenta con tres roles de usuario con diferentes niveles de permisos:
+
+### 👑 Administrador
+- **Acceso completo** a todas las funcionalidades del sistema
+- **Gestión de productos**: Crear, editar, eliminar herramientas
+- **Gestión de usuarios**: Agregar, modificar y eliminar usuarios
+- **Aprobación de tickets**: Revisar y aprobar/rechazar solicitudes de compra
+- **Entrega de herramientas**: Procesar entregas de tickets aprobados
+- **Reportes y estadísticas**: Acceso completo a todos los reportes
+
+### 👨‍💼 Supervisor
+- **Consulta de inventario**: Ver todos los productos y su estado
+- **Búsqueda y filtros**: Usar todas las herramientas de búsqueda
+- **Sistema de tickets**: Crear solicitudes de compra de herramientas
+- **Seguimiento de tickets**: Ver el estado de sus solicitudes
+- **Sin acceso** a gestión de productos o usuarios
+
+### 👷 Operador
+- **Consulta de inventario**: Ver todos los productos y su estado
+- **Búsqueda básica**: Usar herramientas de búsqueda
+- **Sistema de tickets**: Crear solicitudes de compra de herramientas
+- **Seguimiento de tickets**: Ver el estado de sus solicitudes
+- **Sin acceso** a gestión de productos o usuarios
+
+## Funcionalidades por Rol
+
+### Gestión de Productos
+| Función | Administrador | Supervisor | Operador |
+|---------|---------------|------------|----------|
+| Ver productos | ✅ | ✅ | ✅ |
+| Crear productos | ✅ | ❌ | ❌ |
+| Editar productos | ✅ | ❌ | ❌ |
+| Eliminar productos | ✅ | ❌ | ❌ |
+| Generar códigos QR | ✅ | ✅ | ✅ |
+
+### Sistema de Tickets de Compra
+| Función | Administrador | Supervisor | Operador |
+|---------|---------------|------------|----------|
+| Crear tickets | ✅ | ✅ | ✅ |
+| Ver tickets propios | ✅ | ✅ | ✅ |
+| Ver todos los tickets | ✅ | ❌ | ❌ |
+| Aprobar/rechazar tickets | ✅ | ❌ | ❌ |
+| Entregar herramientas | ✅ | ❌ | ❌ |
+
+## Sistema de Tickets de Compra
+
+### Crear un Ticket de Compra
+
+1. **Acceso**: Solo supervisores y operadores pueden crear tickets
+2. **Proceso**:
+   - Hacer clic en "➕ Nuevo Ticket" en la sección de tickets
+   - Completar la información requerida:
+     - **Orden de Producción**: Número de orden o proyecto
+     - **Justificación**: Explicar por qué se necesitan las herramientas
+   - Agregar herramientas al ticket:
+     - Seleccionar herramienta del inventario
+     - Especificar cantidad solicitada
+     - Opcional: Precio unitario
+   - Enviar ticket para revisión
+
+### Estados del Ticket
+
+- **🟡 Pendiente**: Ticket creado, esperando aprobación
+- **🟢 Aprobado**: Ticket aprobado por administrador, listo para entrega
+- **🔴 Rechazado**: Ticket rechazado por administrador
+- **🔵 Entregado**: Herramientas entregadas completamente
+
+### Flujo de Trabajo
+
+1. **Solicitud**: Supervisor/Operador crea ticket
+2. **Revisión**: Administrador revisa y aprueba/rechaza
+3. **Entrega**: Administrador entrega las herramientas
+4. **Completado**: Ticket marcado como entregado
+
+### Seguimiento de Tickets
+
+- **Supervisores/Operadores**: Ven solo sus propios tickets
+- **Administradores**: Ven todos los tickets del sistema
+- **Filtros**: Por estado (pendiente, aprobado, rechazado, entregado)
+- **Detalles**: Información completa de cada ticket
+
+## Funcionalidades Comunes
+
+### Búsqueda de Productos
+- **Búsqueda en tiempo real** por nombre, código, ubicación o categoría
+- **Filtro de stock bajo**: Hacer clic en el indicador "Stock Bajo" en la barra de estadísticas
+- **Tecla Escape**: Limpiar búsqueda y filtros
+- **Mensaje de resultados**: Muestra cantidad de productos encontrados
+
+### Navegación
+- **Responsive**: Optimizado para tablets y dispositivos móviles
+- **Accesibilidad**: Botones grandes para uso táctil
+- **Notificaciones**: Feedback visual para todas las acciones
+
+### Sesión de Usuario
+- **Persistencia**: La sesión se mantiene activa
+- **Cierre automático**: Al cerrar el navegador
+- **Información visible**: Nombre, rol y botón de cerrar sesión en la parte superior
+
+## Mejores Prácticas
+
+### Para Supervisores y Operadores
+- **Crear tickets específicos**: Incluir orden de producción y justificación clara
+- **Revisar inventario**: Verificar disponibilidad antes de solicitar
+- **Seguimiento**: Revisar regularmente el estado de sus tickets
+
+### Para Administradores
+- **Revisión oportuna**: Revisar tickets pendientes regularmente
+- **Comentarios claros**: Proporcionar feedback al aprobar/rechazar
+- **Control de inventario**: Verificar stock antes de aprobar entregas
+
+## Solución de Problemas
+
+### Problemas Comunes
+- **Sesión expirada**: El sistema redirige automáticamente al login
+- **Error de permisos**: Verificar que el rol tenga acceso a la función
+- **Productos no encontrados**: Usar búsqueda o verificar filtros activos
+
+### Contacto
+Para problemas técnicos o solicitudes de acceso, contactar al administrador del sistema. 
