@@ -65,6 +65,24 @@ header h1 {
     color: #dc3545;
 }
 
+.stat-value.clickeable {
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border-radius: 4px;
+    padding: 2px 6px;
+}
+
+.stat-value.clickeable:hover {
+    background: rgba(220, 53, 69, 0.1);
+    transform: scale(1.05);
+}
+
+.stat-value.filtro-activo {
+    background: #dc3545;
+    color: white;
+    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
+}
+
 /* Contenido principal */
 .main-content {
     display: grid;
