@@ -21,7 +21,7 @@
                     <span class="stat-label">Total Productos:</span>
                     <span id="totalProductos" class="stat-value">0</span>
                 </div>
-                <div class="stat-item">
+                <div id="stockBajoContainer" class="stat-item">
                     <span class="stat-label">Stock Bajo:</span>
                     <span id="stockBajo" class="stat-value warning">0</span>
                 </div>
@@ -93,6 +93,20 @@
                     <!-- Los productos se cargarán aquí dinámicamente -->
                 </div>
             </div>
+            
+            <!-- Sistema de Tickets de Compra -->
+            <div class="tickets-section">
+                <div class="section-header">
+                    <h2>🎫 Tickets de Compra</h2>
+                    <button id="nuevoTicketBtn" class="btn-primary" onclick="app.mostrarFormularioTicket()">
+                        ➕ Nuevo Ticket
+                    </button>
+                </div>
+                
+                <div id="ticketsList" class="tickets-grid">
+                    <!-- Los tickets se cargarán aquí dinámicamente -->
+                </div>
+            </div>
         </div>
         
         <!-- Modal de confirmación -->
@@ -119,6 +133,92 @@
                 <div class="modal-buttons">
                     <button onclick="app.imprimirQr()" class="btn-primary">🖨️ Imprimir</button>
                     <button onclick="app.cerrarQrModal()">Cerrar</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Modal para crear/editar ticket -->
+        <div id="ticketModal" class="modal">
+            <div class="modal-content ticket-modal-content">
+                <h3 id="ticketModalTitle">🎫 Nuevo Ticket de Compra</h3>
+                <form id="ticketForm">
+                    <div class="input-group">
+                        <label for="ordenProduccion">Orden de Producción: *</label>
+                        <input type="text" id="ordenProduccion" placeholder="Ej: OP-2024-001" required>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="justificacion">Justificación: *</label>
+                        <textarea id="justificacion" placeholder="Explique por qué necesita estas herramientas..." required></textarea>
+                    </div>
+                    
+                    <div class="ticket-items-section">
+                        <h4>🛠️ Herramientas Solicitadas</h4>
+                        <div id="ticketItemsList">
+                            <!-- Items del ticket se agregarán aquí -->
+                        </div>
+                        <button type="button" id="agregarItemBtn" class="btn-secondary" onclick="app.agregarItemTicket()">
+                            ➕ Agregar Herramienta
+                        </button>
+                    </div>
+                    
+                    <div class="modal-buttons">
+                        <button type="submit" class="btn-primary">📤 Enviar Ticket</button>
+                        <button type="button" onclick="app.cerrarTicketModal()">Cancelar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Modal para ver detalles del ticket -->
+        <div id="ticketDetalleModal" class="modal">
+            <div class="modal-content ticket-detalle-content">
+                <h3 id="ticketDetalleTitle">🎫 Detalles del Ticket</h3>
+                <div id="ticketDetalleInfo">
+                    <!-- Información del ticket se cargará aquí -->
+                </div>
+                <div id="ticketDetalleActions" class="modal-buttons">
+                    <!-- Botones de acción se mostrarán según el rol y estado -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Modal para aprobar/rechazar ticket -->
+        <div id="ticketDecisionModal" class="modal">
+            <div class="modal-content">
+                <h3 id="ticketDecisionTitle">📋 Decisión del Ticket</h3>
+                <form id="ticketDecisionForm">
+                    <div class="input-group">
+                        <label for="decisionAccion">Acción:</label>
+                        <select id="decisionAccion" required>
+                            <option value="aprobar">✅ Aprobar</option>
+                            <option value="rechazar">❌ Rechazar</option>
+                        </select>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="decisionComentarios">Comentarios:</label>
+                        <textarea id="decisionComentarios" placeholder="Comentarios adicionales..."></textarea>
+                    </div>
+                    
+                    <div class="modal-buttons">
+                        <button type="submit" class="btn-primary">Confirmar</button>
+                        <button type="button" onclick="app.cerrarDecisionModal()">Cancelar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Modal para entregar ticket -->
+        <div id="ticketEntregaModal" class="modal">
+            <div class="modal-content ticket-entrega-content">
+                <h3>📦 Entregar Herramientas</h3>
+                <div id="ticketEntregaItems">
+                    <!-- Items para entregar se cargarán aquí -->
+                </div>
+                <div class="modal-buttons">
+                    <button onclick="app.procesarEntrega()" class="btn-primary">✅ Confirmar Entrega</button>
+                    <button onclick="app.cerrarEntregaModal()">Cancelar</button>
                 </div>
             </div>
         </div>
