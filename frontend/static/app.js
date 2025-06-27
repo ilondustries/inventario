@@ -49,6 +49,20 @@ class AlmacenApp {
                     <button onclick="app.logout()" class="btn-logout">🚪 Cerrar Sesión</button>
                 `;
             }
+            
+            // Ocultar formulario de productos para usuarios que no sean administradores
+            this.updateFormVisibility();
+        }
+    }
+    
+    updateFormVisibility() {
+        const formSection = document.querySelector('.form-section');
+        if (formSection) {
+            if (this.currentUser && this.currentUser.rol === 'admin') {
+                formSection.style.display = 'block';
+            } else {
+                formSection.style.display = 'none';
+            }
         }
     }
     
@@ -340,6 +354,13 @@ class AlmacenApp {
             const cantidadClass = producto.cantidad <= 5 ? 'cantidad-baja' : '';
             const precio = producto.precio_unitario ? `$${producto.precio_unitario.toFixed(2)}` : 'N/A';
             
+            // Determinar qué botones mostrar según el rol
+            const isAdmin = this.currentUser && this.currentUser.rol === 'admin';
+            const actionButtons = isAdmin ? `
+                <button onclick="app.editarProducto(${producto.id})" class="btn-edit" title="Editar">✏️</button>
+                <button onclick="app.eliminarProducto(${producto.id})" class="btn-delete" title="Eliminar">🗑️</button>
+            ` : '';
+            
             card.innerHTML = `
                 <div class="producto-info">
                     <h3>${producto.nombre}</h3>
@@ -352,8 +373,7 @@ class AlmacenApp {
                     </div>
                 </div>
                 <div class="producto-actions">
-                    <button onclick="app.editarProducto(${producto.id})" class="btn-edit" title="Editar">✏️</button>
-                    <button onclick="app.eliminarProducto(${producto.id})" class="btn-delete" title="Eliminar">🗑️</button>
+                    ${actionButtons}
                     <button onclick="app.mostrarQrProducto(${producto.id})" class="btn-qr" title="Ver QR">🔳 QR</button>
                 </div>
             `;
