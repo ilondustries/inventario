@@ -57,11 +57,15 @@ class AlmacenApp {
     
     updateFormVisibility() {
         const formSection = document.querySelector('.form-section');
-        if (formSection) {
+        const mainContent = document.querySelector('.main-content');
+        
+        if (formSection && mainContent) {
             if (this.currentUser && this.currentUser.rol === 'admin') {
                 formSection.style.display = 'block';
+                mainContent.classList.remove('form-hidden');
             } else {
                 formSection.style.display = 'none';
+                mainContent.classList.add('form-hidden');
             }
         }
     }
@@ -114,10 +118,21 @@ class AlmacenApp {
             this.guardarProducto();
         });
         
-        // Búsqueda
-        document.getElementById('searchInput').addEventListener('input', (e) => {
+        // Búsqueda con soporte de teclas
+        const searchInput = document.getElementById('searchInput');
+        searchInput.addEventListener('input', (e) => {
             this.filtroActual = e.target.value;
             this.filtrarProductos();
+        });
+        
+        // Tecla Escape para limpiar búsqueda
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                searchInput.value = '';
+                this.filtroActual = '';
+                this.filtrarProductos();
+            }
         });
         
         // Modal de confirmación
@@ -146,7 +161,7 @@ class AlmacenApp {
         document.getElementById('searchInput').addEventListener('input', (e) => {
             clearTimeout(timeout);
             timeout = setTimeout(() => {
-                this.buscarProductos();
+                this.filtrarProductos();
             }, 300);
         });
     }
@@ -310,12 +325,6 @@ class AlmacenApp {
         }
     }
     
-    buscarProductos() {
-        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-        this.filtroActual = searchTerm;
-        this.filtrarProductos();
-    }
-    
     filtrarProductos() {
         const productosFiltrados = this.productos.filter(producto => {
             if (!this.filtroActual) return true;
@@ -380,6 +389,44 @@ class AlmacenApp {
             
             container.appendChild(card);
         });
+        
+        // Agregar mensaje de resultados de búsqueda al final
+        this.agregarMensajeResultados(productos);
+    }
+    
+    agregarMensajeResultados(productos) {
+        const container = document.getElementById('productosList');
+        const totalProductos = this.productos.length;
+        const productosMostrados = productos.length;
+        
+        // Crear elemento para el mensaje de resultados
+        const mensajeElement = document.createElement('div');
+        mensajeElement.className = 'search-results-message';
+        
+        if (this.filtroActual && this.filtroActual.trim() !== '') {
+            // Hay un filtro activo
+            if (productosMostrados === 0) {
+                mensajeElement.innerHTML = `
+                    <p>🔍 No se encontraron herramientas que coincidan con "<strong>${this.filtroActual}</strong>"</p>
+                    <p>Total de herramientas en inventario: <strong>${totalProductos}</strong></p>
+                `;
+            } else if (productosMostrados === totalProductos) {
+                mensajeElement.innerHTML = `
+                    <p>🔍 Mostrando todas las <strong>${productosMostrados}</strong> herramientas</p>
+                `;
+            } else {
+                mensajeElement.innerHTML = `
+                    <p>🔍 Se encontraron <strong>${productosMostrados}</strong> de <strong>${totalProductos}</strong> herramientas para "<strong>${this.filtroActual}</strong>"</p>
+                `;
+            }
+        } else {
+            // No hay filtro activo
+            mensajeElement.innerHTML = `
+                <p>📋 Mostrando <strong>${productosMostrados}</strong> herramientas del inventario</p>
+            `;
+        }
+        
+        container.appendChild(mensajeElement);
     }
     
     async mostrarQrProducto(productoId) {
