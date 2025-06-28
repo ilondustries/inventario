@@ -60,14 +60,54 @@ class AlmacenApp {
     updateFormVisibility() {
         const formSection = document.querySelector('.form-section');
         const mainContent = document.querySelector('.main-content');
+        const adminMenu = document.getElementById('adminMenu');
         
         if (formSection && mainContent) {
             if (this.currentUser && this.currentUser.rol === 'admin') {
+                // Administradores: acceso completo con menú de pestañas
                 formSection.style.display = 'block';
                 mainContent.classList.remove('form-hidden');
+                mainContent.classList.add('admin-layout');
+                
+                // Mostrar menú de administrador
+                if (adminMenu) {
+                    adminMenu.style.display = 'flex';
+                }
+                
+                // Mostrar la primera sección por defecto
+                this.mostrarSeccion('form-section');
+            } else if (this.currentUser && (this.currentUser.rol === 'supervisor' || this.currentUser.rol === 'operador')) {
+                // Supervisores y operadores: pueden ver inventario y tickets, pero no gestión de herramientas
+                formSection.style.display = 'none';
+                mainContent.classList.remove('form-hidden');
+                mainContent.classList.add('admin-layout');
+                
+                // Mostrar menú de administrador pero ocultar pestaña de gestión
+                if (adminMenu) {
+                    adminMenu.style.display = 'flex';
+                    
+                    // Ocultar pestaña de gestión de herramientas para no-admin
+                    const gestionTab = adminMenu.querySelector('[data-section="form-section"]');
+                    if (gestionTab) {
+                        gestionTab.style.display = 'none';
+                    }
+                }
+                
+                // Mostrar sección de productos por defecto
+                this.mostrarSeccion('products-section');
             } else {
+                // Usuarios sin rol específico: solo inventario
                 formSection.style.display = 'none';
                 mainContent.classList.add('form-hidden');
+                mainContent.classList.remove('admin-layout');
+                
+                // Ocultar menú de administrador
+                if (adminMenu) {
+                    adminMenu.style.display = 'none';
+                }
+                
+                // Mostrar sección de productos para usuarios no-admin
+                this.mostrarSeccion('products-section');
             }
         }
     }
@@ -355,10 +395,14 @@ class AlmacenApp {
         document.getElementById('confirmMessage').textContent = mensaje;
         document.getElementById('confirmModal').style.display = 'block';
         document.getElementById('confirmYes').onclick = () => this.confirmarEliminacion(productoId);
+        // Prevenir scroll del body
+        document.body.classList.add('modal-open');
     }
     
     cerrarModal() {
         document.getElementById('confirmModal').style.display = 'none';
+        // Restaurar scroll del body
+        document.body.classList.remove('modal-open');
     }
     
     async confirmarEliminacion(productoId) {
@@ -522,6 +566,8 @@ class AlmacenApp {
             document.getElementById('qrProductoImg').src = '';
             document.getElementById('qrProductoInfo').innerHTML = 'Cargando QR...';
             document.getElementById('qrModal').style.display = 'block';
+            // Prevenir scroll del body
+            document.body.classList.add('modal-open');
             
             const response = await fetch(`${this.apiUrl}/productos/${productoId}/qr`);
             if (!response.ok) throw new Error('No se pudo obtener el QR');
@@ -547,6 +593,8 @@ class AlmacenApp {
     
     cerrarQrModal() {
         document.getElementById('qrModal').style.display = 'none';
+        // Restaurar scroll del body
+        document.body.classList.remove('modal-open');
     }
     
     imprimirQr() {
@@ -668,7 +716,10 @@ class AlmacenApp {
     async initTickets() {
         // Solo inicializar tickets si el usuario tiene permisos
         if (this.currentUser && ['supervisor', 'operador', 'admin'].includes(this.currentUser.rol)) {
-            this.loadTickets();
+            // Para administradores, los tickets se cargarán cuando se seleccione la pestaña
+            if (this.currentUser.rol !== 'admin') {
+                this.loadTickets();
+            }
             this.setupTicketEventListeners();
         } else {
             // Ocultar sección de tickets si no tiene permisos
@@ -697,6 +748,62 @@ class AlmacenApp {
                 this.procesarDecisionTicket();
             });
         }
+        
+        // Eventos de teclado para cerrar modales con Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.cerrarModalActivo();
+            }
+        });
+        
+        // Eventos de clic fuera de modales para cerrarlos
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('modal')) {
+                this.cerrarModalActivo();
+            }
+        });
+    }
+    
+    cerrarModalActivo() {
+        // Cerrar el modal que esté actualmente abierto
+        const modales = [
+            'ticketModal',
+            'ticketDetalleModal', 
+            'ticketDecisionModal',
+            'ticketEntregaModal',
+            'qrModal',
+            'confirmModal'
+        ];
+        
+        for (const modalId of modales) {
+            const modal = document.getElementById(modalId);
+            if (modal && modal.style.display === 'flex') {
+                modal.style.display = 'none';
+                // Restaurar scroll del body
+                document.body.classList.remove('modal-open');
+                break; // Solo cerrar el primer modal que encuentre abierto
+            }
+        }
+    }
+    
+    cerrarTodosLosModales() {
+        // Cerrar todos los modales de tickets
+        const modales = [
+            'ticketModal',
+            'ticketDetalleModal', 
+            'ticketDecisionModal',
+            'ticketEntregaModal'
+        ];
+        
+        modales.forEach(modalId => {
+            const modal = document.getElementById(modalId);
+            if (modal && modal.style.display === 'flex') {
+                modal.style.display = 'none';
+            }
+        });
+        
+        // Restaurar scroll del body
+        document.body.classList.remove('modal-open');
     }
     
     async loadTickets() {
@@ -793,21 +900,264 @@ class AlmacenApp {
         // Mostrar modal
         document.getElementById('ticketModal').style.display = 'flex';
         document.getElementById('ticketModalTitle').textContent = '🎫 Nuevo Ticket de Compra';
+        // Prevenir scroll del body
+        document.body.classList.add('modal-open');
     }
     
     agregarItemTicket() {
         const itemsList = document.getElementById('ticketItemsList');
-        const itemId = Date.now(); // ID temporal
+        
+        // Mostrar modal de escáner QR
+        this.mostrarQrScannerModal();
+    }
+    
+    mostrarQrScannerModal() {
+        console.log('🔍 Verificando compatibilidad de cámara...');
+        console.log('navigator.mediaDevices:', navigator.mediaDevices);
+        console.log('navigator.mediaDevices.getUserMedia:', navigator.mediaDevices?.getUserMedia);
+        console.log('Protocolo actual:', location.protocol);
+        console.log('Hostname:', location.hostname);
+        
+        // Verificar si el navegador soporta getUserMedia
+        if (!navigator.mediaDevices) {
+            console.error('❌ navigator.mediaDevices no está disponible');
+            this.showNotification('Su navegador no soporta el acceso a la cámara. Use Chrome, Firefox o Safari actualizado.', 'error');
+            return;
+        }
+        
+        if (!navigator.mediaDevices.getUserMedia) {
+            console.error('❌ navigator.mediaDevices.getUserMedia no está disponible');
+            this.showNotification('Su navegador no soporta getUserMedia. Use Chrome, Firefox o Safari actualizado.', 'error');
+            return;
+        }
+        
+        // Verificar si estamos en HTTPS (requerido para cámara en muchos navegadores)
+        if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+            console.error('❌ Protocolo no seguro:', location.protocol);
+            this.showNotification('El acceso a la cámara requiere HTTPS. Use localhost para desarrollo.', 'error');
+            return;
+        }
+        
+        console.log('✅ Compatibilidad verificada, mostrando modal...');
+        
+        // Mostrar modal
+        document.getElementById('qrScannerModal').style.display = 'flex';
+        document.getElementById('scannerStatusText').textContent = '🔄 Listo para escanear';
+        document.getElementById('qrScannerStatus').className = 'scanner-status';
+        
+        // Mostrar botón de iniciar escáner
+        document.getElementById('startScannerBtn').style.display = 'inline-block';
+        document.getElementById('stopScannerBtn').style.display = 'none';
+        
+        // Prevenir scroll del body
+        document.body.classList.add('modal-open');
+        
+        // Mejoras específicas para móviles
+        const isMobile = window.innerWidth <= 768;
+        if (isMobile) {
+            console.log('📱 Detectado dispositivo móvil, aplicando optimizaciones...');
+            
+            // Forzar el scroll del modal después de un breve delay
+            setTimeout(() => {
+                const modalContent = document.querySelector('.qr-scanner-content');
+                if (modalContent) {
+                    modalContent.scrollTop = 0;
+                    console.log('📱 Scroll del modal inicializado');
+                }
+            }, 100);
+            
+            // Agregar listener para orientación
+            window.addEventListener('orientationchange', () => {
+                setTimeout(() => {
+                    const modalContent = document.querySelector('.qr-scanner-content');
+                    if (modalContent) {
+                        modalContent.scrollTop = 0;
+                        console.log('📱 Scroll del modal reinicializado después del cambio de orientación');
+                    }
+                }, 300);
+            });
+        }
+        
+        // Aplicar mejoras de scroll para móviles
+        setTimeout(() => {
+            this.mejorarScrollMovil();
+        }, 200);
+    }
+    
+    async iniciarQrScanner() {
+        try {
+            const video = document.getElementById('qrVideo');
+            const statusText = document.getElementById('scannerStatusText');
+            const statusDiv = document.getElementById('qrScannerStatus');
+            
+            statusText.textContent = '🔐 Solicitando permisos de cámara...';
+            statusDiv.className = 'scanner-status';
+            
+            // Verificar si ZXing está disponible
+            if (typeof ZXing === 'undefined') {
+                throw new Error('ZXing no está disponible. Verifique la conexión a internet.');
+            }
+            
+            // Obtener acceso a la cámara
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    facingMode: 'environment', // Usar cámara trasera si está disponible
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                } 
+            });
+            
+            video.srcObject = stream;
+            statusText.textContent = '🔍 Escaneando... Posicione el código QR frente a la cámara';
+            statusDiv.className = 'scanner-status scanning';
+            
+            // Ocultar botón de iniciar y mostrar botón de detener
+            document.getElementById('startScannerBtn').style.display = 'none';
+            document.getElementById('stopScannerBtn').style.display = 'inline-block';
+            
+            // Inicializar ZXing
+            this.zxingReader = new ZXing.BrowserQRCodeReader();
+            
+            // Iniciar escaneo
+            this.iniciarEscaneoZXing(video);
+            
+        } catch (error) {
+            console.error('Error accediendo a la cámara:', error);
+            
+            let mensajeError = 'Error al acceder a la cámara';
+            let instrucciones = '';
+            
+            if (error.name === 'NotAllowedError') {
+                mensajeError = 'Permiso de cámara denegado';
+                instrucciones = 'Haga clic en "Permitir" cuando el navegador lo solicite. Si ya lo denegó, recargue la página.';
+            } else if (error.name === 'NotFoundError') {
+                mensajeError = 'No se encontró ninguna cámara';
+                instrucciones = 'Verifique que su dispositivo tenga cámara y esté conectada.';
+            } else if (error.name === 'NotReadableError') {
+                mensajeError = 'La cámara está siendo usada por otra aplicación';
+                instrucciones = 'Cierre otras aplicaciones que usen la cámara (WhatsApp, Zoom, etc.) y recargue la página.';
+            } else if (error.name === 'OverconstrainedError') {
+                mensajeError = 'La cámara no cumple con los requisitos';
+                instrucciones = 'Intente usar un dispositivo diferente o actualice su navegador.';
+            } else if (error.name === 'TypeError') {
+                mensajeError = 'Error de configuración de la cámara';
+                instrucciones = 'Verifique que su navegador esté actualizado.';
+            } else if (error.message.includes('ZXing')) {
+                mensajeError = 'Error cargando ZXing';
+                instrucciones = 'Verifique su conexión a internet y recargue la página.';
+            }
+            
+            this.showNotification(mensajeError + '. ' + instrucciones, 'error');
+            document.getElementById('scannerStatusText').textContent = '❌ ' + mensajeError;
+            document.getElementById('qrScannerStatus').className = 'scanner-status error';
+        }
+    }
+    
+    async iniciarEscaneoZXing(video) {
+        try {
+            // Decodificar una vez desde el dispositivo de video
+            const result = await this.zxingReader.decodeOnceFromVideoDevice(
+                undefined, // Usar la cámara por defecto
+                'qrVideo'  // ID del elemento video
+            );
+            
+            console.log('✅ Código QR detectado:', result.text);
+            this.procesarCodigoQR(result.text);
+            
+        } catch (error) {
+            console.error('Error en escaneo ZXing:', error);
+            // Continuar escaneando
+            setTimeout(() => {
+                this.iniciarEscaneoZXing(video);
+            }, 1000);
+        }
+    }
+    
+    detenerQrScanner() {
+        const video = document.getElementById('qrVideo');
+        if (video.srcObject) {
+            const tracks = video.srcObject.getTracks();
+            tracks.forEach(track => track.stop());
+            video.srcObject = null;
+        }
+        
+        // Detener ZXing si está activo
+        if (this.zxingReader) {
+            this.zxingReader.reset();
+            this.zxingReader = null;
+        }
+    }
+    
+    cerrarQrScannerModal() {
+        this.detenerQrScanner();
+        document.getElementById('qrScannerModal').style.display = 'none';
+        // Restaurar scroll del body
+        document.body.classList.remove('modal-open');
+    }
+    
+    procesarCodigoQR(qrData) {
+        try {
+            console.log('🔍 Procesando código QR:', qrData);
+            
+            // Enviar código al backend para buscar el producto
+            fetch(`${this.apiUrl}/productos/buscar`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ codigo: qrData })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Producto no encontrado');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('✅ Producto encontrado:', data.producto);
+                this.productoEscaneado(data.producto);
+            })
+            .catch(error => {
+                console.error('❌ Error buscando producto:', error);
+                this.showNotification('Producto no encontrado en el inventario', 'error');
+                // Continuar escaneando
+                setTimeout(() => {
+                    this.iniciarEscaneoZXing(document.getElementById('qrVideo'));
+                }, 2000);
+            });
+            
+        } catch (error) {
+            console.error('Error procesando código QR:', error);
+            this.showNotification('Error al procesar código QR', 'error');
+        }
+    }
+    
+    productoEscaneado(producto) {
+        const statusText = document.getElementById('scannerStatusText');
+        const statusDiv = document.getElementById('qrScannerStatus');
+        
+        statusText.textContent = `✅ Producto detectado: ${producto.nombre}`;
+        statusDiv.className = 'scanner-status success';
+        
+        // Agregar el producto al ticket
+        this.agregarProductoAlTicket(producto);
+        
+        // Cerrar el modal después de un momento
+        setTimeout(() => {
+            this.cerrarQrScannerModal();
+        }, 1500);
+    }
+    
+    agregarProductoAlTicket(producto) {
+        const itemsList = document.getElementById('ticketItemsList');
+        const itemId = Date.now();
         
         const itemHtml = `
-            <div class="ticket-item-form" data-item-id="${itemId}">
+            <div class="ticket-item-form" data-item-id="${itemId}" data-producto-id="${producto.id}">
                 <div class="input-row">
                     <div class="input-group">
                         <label>Herramienta:</label>
-                        <select class="producto-select" required>
-                            <option value="">Seleccionar herramienta...</option>
-                            ${this.productos.map(p => `<option value="${p.id}" data-precio="${p.precio_unitario || 0}">${p.nombre}</option>`).join('')}
-                        </select>
+                        <input type="text" value="${producto.nombre}" readonly style="background: #f8f9fa;">
                     </div>
                     <div class="input-group">
                         <label>Cantidad:</label>
@@ -815,7 +1165,7 @@ class AlmacenApp {
                     </div>
                     <div class="input-group">
                         <label>Precio Unit.:</label>
-                        <input type="number" class="precio-input" min="0" step="0.01" placeholder="0.00">
+                        <input type="number" class="precio-input" min="0" step="0.01" value="${producto.precio_unitario || ''}" readonly style="background: #f8f9fa;">
                     </div>
                     <button type="button" class="btn-remove-item" onclick="app.removerItemTicket(${itemId})">❌</button>
                 </div>
@@ -824,16 +1174,7 @@ class AlmacenApp {
         
         itemsList.insertAdjacentHTML('beforeend', itemHtml);
         
-        // Configurar eventos para el nuevo item
-        const itemElement = itemsList.querySelector(`[data-item-id="${itemId}"]`);
-        const productoSelect = itemElement.querySelector('.producto-select');
-        const precioInput = itemElement.querySelector('.precio-input');
-        
-        productoSelect.addEventListener('change', (e) => {
-            const selectedOption = e.target.options[e.target.selectedIndex];
-            const precio = selectedOption.dataset.precio;
-            precioInput.value = precio || '';
-        });
+        this.showNotification(`✅ ${producto.nombre} agregado al ticket`, 'success');
     }
     
     removerItemTicket(itemId) {
@@ -910,6 +1251,8 @@ class AlmacenApp {
     
     cerrarTicketModal() {
         document.getElementById('ticketModal').style.display = 'none';
+        // Restaurar scroll del body
+        document.body.classList.remove('modal-open');
     }
     
     async verTicketDetalle(ticketId) {
@@ -967,17 +1310,23 @@ class AlmacenApp {
         
         // Mostrar modal
         document.getElementById('ticketDetalleModal').style.display = 'flex';
+        // Prevenir scroll del body
+        document.body.classList.add('modal-open');
     }
     
     mostrarDecisionModal(ticketId) {
         this.currentTicketId = ticketId;
         document.getElementById('ticketDecisionModal').style.display = 'flex';
         document.getElementById('ticketDecisionForm').reset();
+        // Prevenir scroll del body
+        document.body.classList.add('modal-open');
     }
     
     cerrarDecisionModal() {
         document.getElementById('ticketDecisionModal').style.display = 'none';
         this.currentTicketId = null;
+        // Restaurar scroll del body
+        document.body.classList.remove('modal-open');
     }
     
     async procesarDecisionTicket() {
@@ -1036,6 +1385,8 @@ class AlmacenApp {
             
             document.getElementById('ticketEntregaItems').innerHTML = itemsHtml;
             document.getElementById('ticketEntregaModal').style.display = 'flex';
+            // Prevenir scroll del body
+            document.body.classList.add('modal-open');
             
         } catch (error) {
             console.error('Error obteniendo ticket para entrega:', error);
@@ -1046,6 +1397,8 @@ class AlmacenApp {
     cerrarEntregaModal() {
         document.getElementById('ticketEntregaModal').style.display = 'none';
         this.currentTicketId = null;
+        // Restaurar scroll del body
+        document.body.classList.remove('modal-open');
     }
     
     async procesarEntrega() {
@@ -1106,6 +1459,80 @@ class AlmacenApp {
         } catch (error) {
             console.error('Error cancelando ticket:', error);
             this.showNotification('Error al cancelar ticket', 'error');
+        }
+    }
+    
+    cambiarSeccion(seccionId) {
+        console.log('🔍 cambiarSeccion llamado con:', seccionId);
+        
+        // Actualizar pestañas activas
+        const tabs = document.querySelectorAll('.menu-tab');
+        tabs.forEach(tab => {
+            tab.classList.remove('active');
+            if (tab.dataset.section === seccionId) {
+                tab.classList.add('active');
+            }
+        });
+        
+        // Mostrar la sección seleccionada
+        this.mostrarSeccion(seccionId);
+    }
+    
+    mostrarSeccion(seccionId) {
+        console.log('🔍 mostrarSeccion llamado con:', seccionId);
+        
+        // Ocultar todas las secciones removiendo la clase 'active'
+        const secciones = document.querySelectorAll('.content-section');
+        console.log('🔍 Secciones encontradas:', secciones.length);
+        
+        secciones.forEach(seccion => {
+            console.log('🔍 Removiendo clase active de:', seccion.className);
+            seccion.classList.remove('active');
+        });
+        
+        // Mostrar la sección seleccionada agregando la clase 'active'
+        const seccionActiva = document.querySelector(`.${seccionId}`);
+        if (seccionActiva) {
+            console.log('🔍 Agregando clase active a:', seccionActiva.className);
+            seccionActiva.classList.add('active');
+        } else {
+            console.error('❌ No se encontró la sección:', seccionId);
+        }
+        
+        // Cargar datos si es necesario
+        if (seccionId === 'products-section') {
+            this.loadProductos();
+        } else if (seccionId === 'tickets-section') {
+            this.loadTickets();
+        }
+    }
+    
+    // Función para mejorar el scroll en dispositivos móviles
+    mejorarScrollMovil() {
+        const modalContent = document.querySelector('.qr-scanner-content');
+        if (!modalContent) return;
+        
+        // Detectar si es un dispositivo táctil
+        const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        
+        if (isTouchDevice) {
+            console.log('📱 Dispositivo táctil detectado, aplicando mejoras de scroll...');
+            
+            // Prevenir el scroll del body cuando se hace scroll en el modal
+            modalContent.addEventListener('touchstart', (e) => {
+                e.stopPropagation();
+            }, { passive: true });
+            
+            modalContent.addEventListener('touchmove', (e) => {
+                e.stopPropagation();
+            }, { passive: true });
+            
+            // Asegurar que el scroll funcione correctamente
+            modalContent.style.webkitOverflowScrolling = 'touch';
+            modalContent.style.overflowY = 'auto';
+            
+            // Forzar un reflow para asegurar que el scroll funcione
+            modalContent.offsetHeight;
         }
     }
 }
