@@ -291,7 +291,7 @@ def init_database():
                 solicitante_id INTEGER NOT NULL,
                 solicitante_nombre TEXT NOT NULL,
                 solicitante_rol TEXT NOT NULL,
-                estado TEXT DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'aprobado', 'rechazado', 'entregado')),
+                estado TEXT DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'aprobado', 'rechazado', 'entregado', 'devuelto')),
                 fecha_solicitud TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 fecha_aprobacion TIMESTAMP,
                 aprobador_id INTEGER,
@@ -455,13 +455,49 @@ async def buscar_producto_por_codigo(datos: dict):
         """, (codigo,))
         producto = cursor.fetchone()
         
-        # Si no se encuentra, buscar en el contenido del código QR
+        # Si no se encuentra, buscar por ID si el código contiene "ID:"
+        if not producto and "ID:" in codigo:
+            try:
+                # Extraer el ID del formato "ID:8|Nombre:Popote"
+                id_part = codigo.split("|")[0]
+                producto_id = int(id_part.replace("ID:", ""))
+                
+                cursor.execute("""
+                    SELECT id, codigo_barras, nombre, descripcion, cantidad, 
+                           cantidad_minima, ubicacion, categoria, precio_unitario
+                    FROM productos 
+                    WHERE id = ?
+                """, (producto_id,))
+                producto = cursor.fetchone()
+                logger.info(f"Buscando por ID extraído: {producto_id}")
+            except (ValueError, IndexError) as e:
+                logger.warning(f"Error extrayendo ID del código QR: {e}")
+        
+        # Si aún no se encuentra, buscar por nombre en el contenido del QR
+        if not producto and "|" in codigo:
+            try:
+                # Extraer el nombre del formato "ID:8|Nombre:Popote"
+                nombre_part = codigo.split("|")[1]
+                nombre = nombre_part.replace("Nombre:", "").strip()
+                
+                cursor.execute("""
+                    SELECT id, codigo_barras, nombre, descripcion, cantidad, 
+                           cantidad_minima, ubicacion, categoria, precio_unitario
+                    FROM productos 
+                    WHERE nombre LIKE ?
+                """, (f"%{nombre}%",))
+                producto = cursor.fetchone()
+                logger.info(f"Buscando por nombre extraído: {nombre}")
+            except (IndexError, Exception) as e:
+                logger.warning(f"Error extrayendo nombre del código QR: {e}")
+        
+        # Si aún no se encuentra, buscar por cualquier parte del código en el nombre
         if not producto:
             cursor.execute("""
                 SELECT id, codigo_barras, nombre, descripcion, cantidad, 
                        cantidad_minima, ubicacion, categoria, precio_unitario
                 FROM productos 
-                WHERE codigo_qr LIKE ? OR nombre LIKE ?
+                WHERE nombre LIKE ? OR codigo_barras LIKE ?
             """, (f"%{codigo}%", f"%{codigo}%"))
             producto = cursor.fetchone()
         
@@ -1236,7 +1272,7 @@ async def listar_tickets(request: Request, estado: str = None, limit: int = 50):
         query = """
             SELECT 
                 t.id, t.numero_ticket, t.orden_produccion, t.justificacion,
-                t.solicitante_nombre, t.solicitante_rol, t.estado,
+                t.solicitante_id, t.solicitante_nombre, t.solicitante_rol, t.estado,
                 t.fecha_solicitud, t.fecha_aprobacion, t.aprobador_nombre,
                 t.comentarios_aprobador, t.fecha_entrega, t.entregado_por_nombre,
                 COUNT(ti.id) as total_items,
@@ -1426,6 +1462,18 @@ async def entregar_ticket(ticket_id: int, entrega: dict, request: Request):
                     detail=f"No se puede entregar más de lo solicitado para {item_ticket['producto_nombre']}"
                 )
             
+            # Verificar stock disponible antes de entregar
+            cursor.execute("""
+                SELECT cantidad FROM productos WHERE id = ?
+            """, (item_ticket["producto_id"],))
+            
+            stock_actual = cursor.fetchone()["cantidad"]
+            if stock_actual < cantidad_entregada:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Stock insuficiente para {item_ticket['producto_nombre']}. Disponible: {stock_actual}, Solicitado: {cantidad_entregada}"
+                )
+            
             # Actualizar cantidad entregada
             cursor.execute("""
                 UPDATE ticket_items 
@@ -1514,7 +1562,7 @@ async def obtener_ticket(ticket_id: int, request: Request):
         cursor.execute("""
             SELECT 
                 t.id, t.numero_ticket, t.orden_produccion, t.justificacion,
-                t.solicitante_nombre, t.solicitante_rol, t.estado,
+                t.solicitante_id, t.solicitante_nombre, t.solicitante_rol, t.estado,
                 t.fecha_solicitud, t.fecha_aprobacion, t.aprobador_nombre,
                 t.comentarios_aprobador, t.fecha_entrega, t.entregado_por_nombre
             FROM tickets_compra t
@@ -1552,6 +1600,161 @@ async def obtener_ticket(ticket_id: int, request: Request):
     except Exception as e:
         logger.error(f"Error al obtener ticket {ticket_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Error al obtener ticket: {str(e)}")
+
+@app.post("/api/tickets/{ticket_id}/devolver")
+async def devolver_ticket(ticket_id: int, devolucion: dict, request: Request):
+    """Procesar devolución de herramientas mediante escaneo QR"""
+    try:
+        current_user = get_current_user(request)
+        require_auth(current_user)
+        
+        # Verificar que el usuario sea supervisor u operador
+        if current_user["rol"] not in ["supervisor", "operador"]:
+            raise HTTPException(status_code=403, detail="Solo supervisores y operadores pueden devolver herramientas")
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Obtener ticket
+        cursor.execute("""
+            SELECT id, numero_ticket, estado, solicitante_id, solicitante_nombre
+            FROM tickets_compra 
+            WHERE id = ?
+        """, (ticket_id,))
+        
+        ticket = cursor.fetchone()
+        if not ticket:
+            raise HTTPException(status_code=404, detail="Ticket no encontrado")
+        
+        ticket = dict(ticket)
+        
+        # Verificar que el ticket esté entregado
+        if ticket["estado"] != "entregado":
+            raise HTTPException(status_code=400, detail="Solo se pueden devolver tickets entregados")
+        
+        # Verificar que el usuario sea el solicitante o supervisor
+        if current_user["rol"] != "supervisor" and ticket["solicitante_id"] != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Solo puedes devolver tus propios tickets")
+        
+        # Obtener producto escaneado
+        codigo_escaneado = devolucion.get("codigo")
+        if not codigo_escaneado:
+            raise HTTPException(status_code=400, detail="Código de producto requerido")
+        
+        # Buscar el producto
+        producto_id = None
+        if "ID:" in codigo_escaneado:
+            try:
+                id_part = codigo_escaneado.split("|")[0]
+                producto_id = int(id_part.replace("ID:", ""))
+            except (ValueError, IndexError):
+                raise HTTPException(status_code=400, detail="Código QR inválido")
+        
+        if not producto_id:
+            raise HTTPException(status_code=400, detail="No se pudo identificar el producto")
+        
+        # Verificar que el producto esté en el ticket
+        cursor.execute("""
+            SELECT ti.id, ti.producto_id, ti.producto_nombre, ti.cantidad_solicitada, 
+                   ti.cantidad_entregada, p.cantidad as stock_actual
+            FROM ticket_items ti
+            JOIN productos p ON ti.producto_id = p.id
+            WHERE ti.ticket_id = ? AND ti.producto_id = ?
+        """, (ticket_id, producto_id))
+        
+        item = cursor.fetchone()
+        if not item:
+            raise HTTPException(status_code=400, detail="Este producto no está en el ticket")
+        
+        item = dict(item)
+        
+        # Verificar que haya productos entregados para devolver
+        if item["cantidad_entregada"] <= 0:
+            raise HTTPException(status_code=400, detail="No hay productos entregados para devolver")
+        
+        # Calcular cantidad a devolver (por defecto 1, pero se puede especificar)
+        cantidad_devolver = devolucion.get("cantidad", 1)
+        if cantidad_devolver <= 0:
+            raise HTTPException(status_code=400, detail="La cantidad a devolver debe ser mayor a 0")
+        
+        if cantidad_devolver > item["cantidad_entregada"]:
+            raise HTTPException(status_code=400, detail=f"Solo se pueden devolver hasta {item['cantidad_entregada']} unidades")
+        
+        # Procesar devolución
+        nueva_cantidad_entregada = item["cantidad_entregada"] - cantidad_devolver
+        
+        # Actualizar cantidad entregada en el ticket
+        cursor.execute("""
+            UPDATE ticket_items 
+            SET cantidad_entregada = ?
+            WHERE id = ?
+        """, (nueva_cantidad_entregada, item["id"]))
+        
+        # Actualizar stock del producto
+        nuevo_stock = item["stock_actual"] + cantidad_devolver
+        cursor.execute("""
+            UPDATE productos 
+            SET cantidad = ?, fecha_actualizacion = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (nuevo_stock, producto_id))
+        
+        # Registrar en historial
+        try:
+            cursor.execute("""
+                INSERT INTO historial (accion, producto_id, cantidad_anterior, cantidad_nueva, usuario_id, usuario_nombre, detalles)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                "devolucion", 
+                producto_id, 
+                item["stock_actual"], 
+                nuevo_stock, 
+                current_user["id"], 
+                current_user["nombre_completo"],
+                f"Devolución de ticket {ticket['numero_ticket']} - {cantidad_devolver} unidades"
+            ))
+        except sqlite3.OperationalError as e:
+            logger.warning(f"Error registrando devolución en historial: {e}")
+        
+        # Verificar si todos los items fueron devueltos
+        cursor.execute("""
+            SELECT 
+                SUM(cantidad_solicitada) as total_solicitado,
+                SUM(cantidad_entregada) as total_entregado
+            FROM ticket_items 
+            WHERE ticket_id = ?
+        """, (ticket_id,))
+        
+        totales = dict(cursor.fetchone())
+        
+        # Si todos los items fueron devueltos, cambiar estado a "devuelto"
+        nuevo_estado = "devuelto" if totales["total_entregado"] == 0 else "entregado"
+        
+        if nuevo_estado == "devuelto":
+            cursor.execute("""
+                UPDATE tickets_compra 
+                SET estado = ?
+                WHERE id = ?
+            """, (nuevo_estado, ticket_id))
+        
+        conn.commit()
+        conn.close()
+        
+        logger.info(f"Devolución procesada: {cantidad_devolver} unidades de {item['producto_nombre']} en ticket {ticket['numero_ticket']}")
+        
+        return {
+            "mensaje": f"Devolución procesada: {cantidad_devolver} unidades de {item['producto_nombre']}",
+            "numero_ticket": ticket["numero_ticket"],
+            "producto": item["producto_nombre"],
+            "cantidad_devolver": cantidad_devolver,
+            "cantidad_restante": nueva_cantidad_entregada,
+            "estado_ticket": nuevo_estado
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error al procesar devolución: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al procesar devolución: {str(e)}")
 
 if __name__ == "__main__":
     import ssl
