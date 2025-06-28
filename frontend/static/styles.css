@@ -104,12 +104,108 @@ header h1 {
     grid-template-columns: 1fr;
 }
 
-/* Sección de formulario */
-.form-section {
+/* Layout para administradores con menú */
+.main-content.admin-layout {
+    grid-template-columns: 1fr;
+    gap: 0;
+    padding: 0;
+}
+
+/* Menú de navegación para administradores */
+.admin-menu {
+    display: flex;
     background: #f8f9fa;
-    padding: 25px;
+    border-radius: 15px 15px 0 0;
+    padding: 0;
+    margin: 0;
+    border-bottom: 2px solid #e9ecef;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.menu-tab {
+    flex: 1;
+    padding: 15px 20px;
+    background: none;
+    border: none;
+    border-radius: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border-bottom: 3px solid transparent;
+    min-height: auto;
+    position: relative;
+}
+
+.menu-tab:hover {
+    background: rgba(102, 126, 234, 0.1);
+    color: #667eea;
+    transform: translateY(-1px);
+}
+
+.menu-tab.active {
+    background: white;
+    color: #667eea;
+    border-bottom-color: #667eea;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+    transform: translateY(-1px);
+}
+
+.menu-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: #667eea;
+    border-radius: 1px;
+}
+
+/* Secciones de contenido */
+.content-section {
+    display: none;
+    padding: 30px;
+    background: white;
+    border-radius: 0 0 15px 15px;
+}
+
+.content-section.active {
+    display: block;
+}
+
+/* Layout para administradores con tres secciones */
+.main-content.admin-layout .form-section {
+    background: #f8f9fa;
+    padding: 20px;
     border-radius: 10px;
     height: fit-content;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+/* Ocultar formulario cuando no esté activo */
+.main-content.admin-layout .form-section:not(.active) {
+    display: none !important;
+    order: unset !important;
+    grid-column: unset !important;
+}
+
+.main-content.admin-layout .products-section {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 10px;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.main-content.admin-layout .tickets-section {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 10px;
+    max-height: 600px;
+    overflow-y: auto;
 }
 
 .form-section h2 {
@@ -153,8 +249,8 @@ header h1 {
 }
 
 .input-group textarea {
+    min-height: 100px;
     resize: vertical;
-    min-height: 80px;
 }
 
 .input-row {
@@ -166,31 +262,29 @@ header h1 {
 .form-buttons {
     display: flex;
     gap: 10px;
+    justify-content: flex-end;
     margin-top: 20px;
 }
 
-/* Botones */
 button {
-    padding: 12px 20px;
+    padding: 12px 24px;
     border: none;
     border-radius: 8px;
     font-size: 1rem;
-    font-weight: bold;
+    font-weight: 600;
     cursor: pointer;
     transition: all 0.3s ease;
-    min-height: 44px;
-    min-width: 44px;
+    min-height: 44px; /* Touch-friendly */
 }
 
 button[type="submit"] {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #667eea;
     color: white;
-    flex: 1;
 }
 
 button[type="submit"]:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    background: #5a6fd8;
+    transform: translateY(-1px);
 }
 
 #cancelBtn {
@@ -201,7 +295,6 @@ button[type="submit"]:hover {
 .btn-edit {
     background: #ffc107;
     color: #333;
-    margin-right: 5px;
 }
 
 .btn-delete {
@@ -214,9 +307,13 @@ button[type="submit"]:hover {
     color: white;
 }
 
+.btn-danger:hover {
+    background: #c82333;
+}
+
 /* Sección de productos */
 .products-section {
-    flex: 1;
+    background: white;
 }
 
 .section-header {
@@ -231,55 +328,63 @@ button[type="submit"]:hover {
 .section-header h2 {
     color: #333;
     font-size: 1.5rem;
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    margin: 0;
 }
 
 .search-bar {
     display: flex;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
+    gap: 10px;
+    align-items: center;
 }
 
 .search-bar input {
-    flex: 1;
-    padding: 0.75rem;
-    border: 1px solid #ced4da;
-    border-radius: 6px;
-    font-size: 0.9rem;
-    background: white;
-    transition: border-color 0.2s ease;
+    padding: 10px 15px;
+    border: 2px solid #ddd;
+    border-radius: 25px;
+    font-size: 1rem;
+    min-width: 300px;
+    transition: all 0.3s ease;
 }
 
 .search-bar input:focus {
     outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .search-bar input::placeholder {
-    color: #6c757d;
-    font-style: italic;
+    color: #999;
 }
 
-/* Grid de productos */
 .productos-grid {
     display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+    max-height: 600px;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+.main-content.admin-layout .productos-grid {
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
     gap: 15px;
+}
+
+.main-content.admin-layout .tickets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
     max-height: 600px;
     overflow-y: auto;
 }
 
-/* Cuando el formulario está oculto, usar más columnas para aprovechar el espacio */
 .main-content.form-hidden .productos-grid {
-    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
 }
 
-/* Grid responsivo para diferentes tamaños de pantalla */
 @media (max-width: 1200px) {
     .main-content.form-hidden .productos-grid {
-        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     }
 }
 
@@ -287,28 +392,154 @@ button[type="submit"]:hover {
     .main-content.form-hidden .productos-grid {
         grid-template-columns: 1fr;
     }
+    
+    .container {
+        padding: 10px;
+    }
+    
+    header h1 {
+        font-size: 2rem;
+    }
+    
+    .stats-bar {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .section-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .search-bar {
+        flex-direction: column;
+    }
+    
+    .producto-card {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 15px;
+    }
+    
+    .producto-stats {
+        justify-content: space-between;
+    }
+    
+    .producto-actions {
+        justify-content: center;
+    }
+    
+    /* Mejoras específicas para el modal en móviles */
+    .modal-content {
+        margin: 2% auto;
+        max-height: 90vh;
+        width: 95%;
+        padding: 20px;
+        border-radius: 10px;
+    }
+    
+    .modal-content h3 {
+        font-size: 1.2rem;
+        margin-bottom: 10px;
+    }
+    
+    .modal-content p {
+        font-size: 0.9rem;
+        margin-bottom: 15px;
+    }
+    
+    .modal-buttons {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .modal-buttons button {
+        width: 100%;
+        padding: 12px;
+        font-size: 1rem;
+    }
+    
+    /* Mejoras específicas para el modal del escáner en móviles */
+    .qr-scanner-content {
+        width: 95vw;
+        max-height: 90vh;
+        margin: 2% auto;
+        padding: 15px;
+    }
+    
+    .scanner-container {
+        margin: 15px 0;
+    }
+    
+    .scanner-info {
+        padding: 12px;
+        margin-bottom: 15px;
+    }
+    
+    .scanner-info p {
+        font-size: 0.85rem;
+        margin: 3px 0;
+    }
+    
+    #qrVideo {
+        max-width: 100%;
+        height: 250px;
+    }
+    
+    .scanner-status {
+        margin-top: 12px;
+        padding: 8px;
+    }
+    
+    .modal-buttons {
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 15px;
+    }
+    
+    .modal-buttons button {
+        width: 100%;
+        padding: 12px;
+        font-size: 1rem;
+    }
 }
 
 .producto-card {
-    background: #f8f9fa;
-    border: 1px solid #ddd;
-    border-radius: 10px;
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 15px;
     padding: 20px;
+    transition: all 0.3s ease;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 20px;
+}
+
+.main-content.admin-layout .producto-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 15px;
+}
+
+.main-content.admin-layout .ticket-card {
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 15px;
+    padding: 20px;
     transition: all 0.3s ease;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    cursor: pointer;
 }
 
 .producto-card:hover {
+    border-color: #667eea;
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
 }
 
 .producto-card.stock-bajo {
-    border-left: 4px solid #dc3545;
-    background: #fff5f5;
+    border-color: #dc3545;
+    background: rgba(220, 53, 69, 0.05);
 }
 
 .producto-info {
@@ -317,25 +548,27 @@ button[type="submit"]:hover {
 
 .producto-info h3 {
     color: #333;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
     font-size: 1.2rem;
 }
 
 .producto-stats {
     display: flex;
-    gap: 20px;
-    color: #666;
+    gap: 15px;
     flex-wrap: wrap;
+    margin-top: 10px;
 }
 
 .producto-stats span {
-    display: flex;
-    align-items: center;
-    gap: 5px;
+    background: #f8f9fa;
+    padding: 5px 10px;
+    border-radius: 15px;
+    font-size: 0.9rem;
+    color: #666;
 }
 
 .cantidad-baja {
-    color: #dc3545;
+    color: #dc3545 !important;
     font-weight: bold;
 }
 
@@ -355,17 +588,48 @@ button[type="submit"]:hover {
     height: 100%;
     background-color: rgba(0,0,0,0.5);
     backdrop-filter: blur(5px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Prevenir scroll del body cuando modal está abierto */
+body.modal-open {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
 }
 
 .modal-content {
     background-color: white;
-    margin: 15% auto;
+    margin: 5% auto;
     padding: 30px;
     border-radius: 15px;
     width: 90%;
     max-width: 400px;
+    max-height: 80vh;
+    overflow-y: auto;
     text-align: center;
     box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    position: relative;
+}
+
+/* Scrollbar personalizado para el modal */
+.modal-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+    background: #667eea;
+    border-radius: 3px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+    background: #5a6fd8;
 }
 
 .modal-content h3 {
@@ -428,44 +692,6 @@ button[type="submit"]:hover {
     
     .input-row {
         grid-template-columns: 1fr;
-    }
-}
-
-@media (max-width: 768px) {
-    .container {
-        padding: 10px;
-    }
-    
-    header h1 {
-        font-size: 2rem;
-    }
-    
-    .stats-bar {
-        flex-direction: column;
-        align-items: center;
-    }
-    
-    .section-header {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    
-    .search-bar {
-        flex-direction: column;
-    }
-    
-    .producto-card {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 15px;
-    }
-    
-    .producto-stats {
-        justify-content: space-between;
-    }
-    
-    .producto-actions {
-        justify-content: center;
     }
 }
 
@@ -546,65 +772,68 @@ button[type="submit"]:hover {
     .user-info {
         flex-direction: column;
         gap: 0.5rem;
-        width: 100%;
     }
 }
 
-/* Modal QR específico */
 .qr-modal-content {
-    text-align: center;
-    padding: 20px 10px;
+    max-width: 500px;
 }
+
 #qrProductoImg {
-    margin: 0 auto;
-    display: block;
     max-width: 250px;
     max-height: 250px;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
 }
 
 .btn-primary {
-    background-color: #007bff;
+    background: #667eea;
     color: white;
     border: none;
-    padding: 8px 16px;
-    border-radius: 4px;
+    padding: 10px 20px;
+    border-radius: 8px;
     cursor: pointer;
-    margin: 0 5px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
 }
+
 .btn-primary:hover {
-    background-color: #0056b3;
+    background: #5a6fd8;
+    transform: translateY(-1px);
 }
 
 .btn-qr {
-    background: #28a745;
+    background: #17a2b8;
     color: white;
     border: none;
-    padding: 8px;
-    border-radius: 4px;
+    padding: 8px 12px;
+    border-radius: 6px;
     cursor: pointer;
-    margin: 0 2px;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
 }
 
-/* Estilos para mensaje de resultados de búsqueda */
+.btn-qr:hover {
+    background: #138496;
+    transform: translateY(-1px);
+}
+
 .search-results-message {
     grid-column: 1 / -1;
     background: #f8f9fa;
-    border: 1px solid #e9ecef;
-    border-radius: 6px;
-    padding: 1rem;
-    margin-top: 1rem;
-    text-align: center;
-    color: #495057;
-    font-size: 0.9rem;
+    padding: 15px;
+    border-radius: 8px;
+    border-left: 4px solid #667eea;
+    margin-top: 20px;
 }
 
 .search-results-message p {
-    margin: 0.25rem 0;
+    margin: 5px 0;
+    color: #666;
 }
 
 .search-results-message strong {
-    color: #212529;
-    font-weight: 600;
+    color: #333;
 }
 
 .search-results-message:first-child {
@@ -613,55 +842,46 @@ button[type="submit"]:hover {
 
 /* Sistema de Tickets */
 .tickets-section {
-    margin-top: 30px;
     background: white;
-    border-radius: 15px;
-    padding: 30px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
 }
 
 .tickets-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
     gap: 20px;
-    margin-top: 20px;
     max-height: 600px;
     overflow-y: auto;
 }
 
 .ticket-card {
-    background: #f8f9fa;
+    background: white;
     border: 2px solid #e9ecef;
-    border-radius: 12px;
+    border-radius: 15px;
     padding: 20px;
     transition: all 0.3s ease;
     cursor: pointer;
 }
 
 .ticket-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
     border-color: #667eea;
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+    transform: translateY(-2px);
 }
 
 .ticket-card.pendiente {
-    border-left: 5px solid #ffc107;
-    background: linear-gradient(135deg, #fff3cd 0%, #f8f9fa 100%);
+    border-left: 4px solid #ffc107;
 }
 
 .ticket-card.aprobado {
-    border-left: 5px solid #28a745;
-    background: linear-gradient(135deg, #d4edda 0%, #f8f9fa 100%);
+    border-left: 4px solid #28a745;
 }
 
 .ticket-card.rechazado {
-    border-left: 5px solid #dc3545;
-    background: linear-gradient(135deg, #f8d7da 0%, #f8f9fa 100%);
+    border-left: 4px solid #dc3545;
 }
 
 .ticket-card.entregado {
-    border-left: 5px solid #17a2b8;
-    background: linear-gradient(135deg, #d1ecf1 0%, #f8f9fa 100%);
+    border-left: 4px solid #17a2b8;
 }
 
 .ticket-header {
@@ -672,37 +892,37 @@ button[type="submit"]:hover {
 }
 
 .ticket-numero {
-    font-size: 1.2rem;
     font-weight: bold;
+    font-size: 1.1rem;
     color: #333;
 }
 
 .ticket-estado {
-    padding: 4px 12px;
+    padding: 5px 12px;
     border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: bold;
-    text-transform: uppercase;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: capitalize;
 }
 
 .ticket-estado.pendiente {
-    background: #ffc107;
-    color: #212529;
+    background: #fff3cd;
+    color: #856404;
 }
 
 .ticket-estado.aprobado {
-    background: #28a745;
-    color: white;
+    background: #d4edda;
+    color: #155724;
 }
 
 .ticket-estado.rechazado {
-    background: #dc3545;
-    color: white;
+    background: #f8d7da;
+    color: #721c24;
 }
 
 .ticket-estado.entregado {
-    background: #17a2b8;
-    color: white;
+    background: #d1ecf1;
+    color: #0c5460;
 }
 
 .ticket-info {
@@ -720,63 +940,95 @@ button[type="submit"]:hover {
 }
 
 .ticket-items {
-    margin-top: 15px;
+    margin-bottom: 15px;
 }
 
 .ticket-items h4 {
-    color: #333;
     margin-bottom: 10px;
+    color: #333;
     font-size: 1rem;
 }
 
 .ticket-item {
-    background: white;
+    background: #f8f9fa;
     padding: 8px 12px;
     border-radius: 6px;
     margin-bottom: 5px;
-    border-left: 3px solid #667eea;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
 .ticket-item-name {
-    font-weight: bold;
+    font-weight: 600;
     color: #333;
 }
 
 .ticket-item-qty {
     color: #666;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
 }
 
 .ticket-actions {
-    margin-top: 15px;
     display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: flex-end;
 }
 
 .ticket-actions button {
-    padding: 6px 12px;
-    font-size: 0.85rem;
-    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 0.9rem;
 }
 
-/* Modales de tickets */
 .ticket-modal-content {
     max-width: 600px;
-    max-height: 80vh;
-    overflow-y: auto;
+    width: 90vw;
 }
 
 .ticket-detalle-content {
     max-width: 700px;
-    max-height: 80vh;
-    overflow-y: auto;
+    width: 90vw;
 }
 
 .ticket-entrega-content {
-    max-width: 600px;
-    max-height: 80vh;
-    overflow-y: auto;
+    max-width: 500px;
+    width: 90vw;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: #333;
+    font-size: 1.3rem;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #666;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.modal-close:hover {
+    background: #f8f9fa;
+    color: #333;
 }
 
 .ticket-items-section {
@@ -795,13 +1047,13 @@ button[type="submit"]:hover {
     background: white;
     padding: 15px;
     border-radius: 8px;
-    margin-bottom: 15px;
-    border: 1px solid #ddd;
+    margin-bottom: 10px;
+    border: 1px solid #e9ecef;
 }
 
 .ticket-item-form .input-row {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr auto;
+    grid-template-columns: 1fr 1fr 1fr auto;
     gap: 10px;
     align-items: end;
 }
@@ -812,22 +1064,24 @@ button[type="submit"]:hover {
 
 .ticket-item-form label {
     font-size: 0.9rem;
-    margin-bottom: 3px;
+    margin-bottom: 5px;
 }
 
 .ticket-item-form input,
 .ticket-item-form select {
-    padding: 8px 10px;
+    padding: 8px 12px;
     font-size: 0.9rem;
 }
 
 .btn-remove-item {
     background: #dc3545;
     color: white;
+    border: none;
     padding: 8px 12px;
     border-radius: 6px;
+    cursor: pointer;
     font-size: 0.9rem;
-    min-width: auto;
+    transition: all 0.3s ease;
 }
 
 .btn-remove-item:hover {
@@ -837,19 +1091,24 @@ button[type="submit"]:hover {
 .btn-secondary {
     background: #6c757d;
     color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: all 0.3s ease;
 }
 
 .btn-secondary:hover {
     background: #5a6268;
 }
 
-/* Estados de entrega */
 .entrega-item {
     background: #f8f9fa;
     padding: 15px;
     border-radius: 8px;
     margin-bottom: 10px;
-    border: 1px solid #ddd;
+    border: 1px solid #e9ecef;
 }
 
 .entrega-item-header {
@@ -860,7 +1119,7 @@ button[type="submit"]:hover {
 }
 
 .entrega-item-name {
-    font-weight: bold;
+    font-weight: 600;
     color: #333;
 }
 
@@ -905,5 +1164,495 @@ button[type="submit"]:hover {
     
     .ticket-actions button {
         width: 100%;
+    }
+    
+    /* Layout de administrador en móviles */
+    .main-content.admin-layout {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+    
+    .main-content.admin-layout .form-section {
+        order: 1;
+    }
+    
+    .main-content.admin-layout .products-section {
+        order: 2;
+    }
+    
+    .main-content.admin-layout .tickets-section {
+        order: 3;
+    }
+    
+    /* Menú responsivo para móviles */
+    .admin-menu {
+        flex-direction: column;
+        border-radius: 15px 15px 0 0;
+    }
+    
+    .menu-tab {
+        padding: 12px 15px;
+        font-size: 0.9rem;
+        border-bottom: 1px solid #e9ecef;
+        border-right: none;
+    }
+    
+    .menu-tab.active {
+        border-right-color: #667eea;
+        border-bottom-color: #667eea;
+    }
+}
+
+/* Responsive para tablets */
+@media (max-width: 1024px) and (min-width: 769px) {
+    .main-content.admin-layout {
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+    
+    .main-content.admin-layout .form-section {
+        order: 1;
+        grid-column: 1 / -1;
+    }
+    
+    .main-content.admin-layout .products-section {
+        order: 2;
+    }
+    
+    .main-content.admin-layout .tickets-section {
+        order: 3;
+    }
+    
+    /* Menú responsivo para tablets */
+    .admin-menu {
+        flex-direction: column;
+        border-radius: 15px 15px 0 0;
+    }
+    
+    .menu-tab {
+        border-bottom: 1px solid #e9ecef;
+        border-right: none;
+    }
+    
+    .menu-tab.active {
+        border-right-color: #667eea;
+        border-bottom-color: #667eea;
+    }
+}
+
+/* Estilos para el escáner de códigos QR */
+.qr-scanner-content {
+    max-width: 600px;
+    width: 90vw;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+/* Scrollbar personalizado para el modal del escáner */
+.qr-scanner-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.qr-scanner-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.qr-scanner-content::-webkit-scrollbar-thumb {
+    background: #667eea;
+    border-radius: 3px;
+}
+
+.qr-scanner-content::-webkit-scrollbar-thumb:hover {
+    background: #5a6fd8;
+}
+
+.scanner-container {
+    text-align: center;
+    margin: 20px 0;
+}
+
+.scanner-info {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid #667eea;
+}
+
+.scanner-info p {
+    margin: 5px 0;
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.scanner-video {
+    position: relative;
+    margin: 20px 0;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+#qrVideo {
+    width: 100%;
+    max-width: 400px;
+    height: 300px;
+    background: #000;
+    border-radius: 8px;
+}
+
+.scanner-status {
+    margin-top: 15px;
+    padding: 10px;
+    border-radius: 6px;
+    background: #f8f9fa;
+}
+
+.scanner-status.scanning {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.scanner-status.success {
+    background: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+}
+
+.scanner-status.error {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+#scannerStatusText {
+    font-weight: 600;
+}
+
+/* Botón para escanear QR en el formulario de tickets */
+.btn-scan-qr {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    margin-left: 10px;
+    transition: all 0.3s ease;
+}
+
+.btn-scan-qr:hover {
+    background: #218838;
+    transform: translateY(-1px);
+}
+
+.btn-scan-qr:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Estilos específicos para teléfonos móviles pequeños */
+@media (max-width: 480px) {
+    .qr-scanner-content {
+        width: 98vw;
+        max-height: 95vh;
+        margin: 1% auto;
+        padding: 10px;
+        border-radius: 8px;
+    }
+    
+    .scanner-container {
+        margin: 10px 0;
+    }
+    
+    .scanner-info {
+        padding: 10px;
+        margin-bottom: 10px;
+    }
+    
+    .scanner-info p {
+        font-size: 0.8rem;
+        margin: 2px 0;
+        line-height: 1.3;
+    }
+    
+    #qrVideo {
+        max-width: 100%;
+        height: 200px;
+        border-radius: 6px;
+    }
+    
+    .scanner-video {
+        margin: 15px 0;
+    }
+    
+    .scanner-status {
+        margin-top: 10px;
+        padding: 8px;
+        font-size: 0.85rem;
+    }
+    
+    .modal-buttons {
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 10px;
+    }
+    
+    .modal-buttons button {
+        width: 100%;
+        padding: 14px;
+        font-size: 1rem;
+        border-radius: 6px;
+        min-height: 48px; /* Touch-friendly */
+    }
+    
+    .modal-header {
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+    }
+    
+    .modal-header h3 {
+        font-size: 1.1rem;
+    }
+    
+    .modal-close {
+        width: 36px;
+        height: 36px;
+        font-size: 1.3rem;
+    }
+    
+    /* Forzar scroll en el modal */
+    .qr-scanner-content {
+        -webkit-overflow-scrolling: touch;
+        overflow-y: scroll;
+        position: relative;
+    }
+    
+    /* Asegurar que el contenido sea desplazable */
+    .scanner-container {
+        min-height: auto;
+        position: relative;
+    }
+}
+
+/* Asegurar que el contenido sea desplazable */
+.scanner-container {
+    min-height: auto;
+    position: relative;
+}
+
+/* Estilos para teléfonos muy pequeños */
+@media (max-width: 360px) {
+    .qr-scanner-content {
+        width: 99vw;
+        max-height: 98vh;
+        margin: 0.5% auto;
+        padding: 8px;
+        border-radius: 6px;
+    }
+    
+    .scanner-container {
+        margin: 8px 0;
+    }
+    
+    .scanner-info {
+        padding: 8px;
+        margin-bottom: 8px;
+    }
+    
+    .scanner-info p {
+        font-size: 0.75rem;
+        margin: 1px 0;
+        line-height: 1.2;
+    }
+    
+    #qrVideo {
+        height: 180px;
+        border-radius: 4px;
+    }
+    
+    .scanner-video {
+        margin: 12px 0;
+    }
+    
+    .scanner-status {
+        margin-top: 8px;
+        padding: 6px;
+        font-size: 0.8rem;
+    }
+    
+    .modal-buttons {
+        gap: 4px;
+        margin-top: 8px;
+    }
+    
+    .modal-buttons button {
+        padding: 12px;
+        font-size: 0.9rem;
+        min-height: 44px;
+    }
+    
+    .modal-header {
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+    }
+    
+    .modal-header h3 {
+        font-size: 1rem;
+    }
+    
+    .modal-close {
+        width: 32px;
+        height: 32px;
+        font-size: 1.2rem;
+    }
+    
+    /* Forzar scroll y prevenir problemas de viewport */
+    .qr-scanner-content {
+        -webkit-overflow-scrolling: touch;
+        overflow-y: auto;
+        position: relative;
+        transform: translateZ(0); /* Forzar aceleración por hardware */
+    }
+    
+    /* Asegurar que el modal sea completamente desplazable */
+    .modal {
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Prevenir zoom en inputs en iOS */
+    .modal input,
+    .modal button {
+        font-size: 16px;
+    }
+}
+
+/* Estilos para orientación landscape en teléfonos */
+@media (max-width: 768px) and (orientation: landscape) {
+    .qr-scanner-content {
+        width: 90vw;
+        max-height: 80vh;
+        margin: 1% auto;
+        padding: 12px;
+    }
+    
+    #qrVideo {
+        height: 150px;
+        max-width: 300px;
+    }
+    
+    .scanner-container {
+        margin: 8px 0;
+    }
+    
+    .scanner-info {
+        padding: 8px;
+        margin-bottom: 8px;
+    }
+    
+    .scanner-info p {
+        font-size: 0.8rem;
+        margin: 2px 0;
+    }
+    
+    .modal-buttons {
+        flex-direction: row;
+        gap: 8px;
+        margin-top: 8px;
+        flex-wrap: wrap;
+    }
+    
+    .modal-buttons button {
+        flex: 1;
+        min-width: 120px;
+        padding: 10px;
+        font-size: 0.9rem;
+    }
+    
+    .modal-header {
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+    }
+    
+    .modal-header h3 {
+        font-size: 1.1rem;
+    }
+    
+    /* Optimizar para pantalla horizontal */
+    .scanner-status {
+        margin-top: 8px;
+        padding: 6px;
+        font-size: 0.8rem;
+    }
+}
+
+/* Optimizar para pantalla horizontal */
+.scanner-status {
+    margin-top: 8px;
+    padding: 6px;
+    font-size: 0.8rem;
+}
+
+/* Mejoras específicas para navegadores móviles */
+@supports (-webkit-touch-callout: none) {
+    /* iOS Safari */
+    .qr-scanner-content {
+        -webkit-overflow-scrolling: touch;
+        overflow-y: auto;
+        position: relative;
+        transform: translateZ(0);
+    }
+    
+    .modal {
+        -webkit-overflow-scrolling: touch;
+        overflow-y: auto;
+    }
+}
+
+/* Mejoras para Chrome en Android */
+@supports (-webkit-appearance: none) and (not (-webkit-touch-callout: none)) {
+    .qr-scanner-content {
+        overflow-y: auto;
+        position: relative;
+        transform: translateZ(0);
+    }
+    
+    .modal {
+        overflow-y: auto;
+    }
+}
+
+/* Forzar scroll en dispositivos con problemas */
+@media (max-width: 480px) {
+    .qr-scanner-content {
+        overflow-y: scroll !important;
+        -webkit-overflow-scrolling: touch !important;
+        position: relative !important;
+    }
+    
+    .modal {
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+    
+    /* Asegurar que el contenido sea desplazable */
+    .scanner-container {
+        position: relative;
+        min-height: auto;
+    }
+    
+    /* Prevenir que el contenido se corte */
+    .scanner-info,
+    .scanner-video,
+    .scanner-status,
+    .modal-buttons {
+        position: relative;
+        z-index: 1;
     }
 } 
