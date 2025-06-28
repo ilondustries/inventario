@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="/static/styles.css?v=1.2">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔧</text></svg>">
     <script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
-    <script src="/static/app.js?v=1.8"></script>
+    <script src="/static/app.js?v=2.3"></script>
 </head>
 <body>
     <div class="container">
@@ -280,6 +280,45 @@
                     <button id="startScannerBtn" onclick="app.iniciarQrScanner()" class="btn-primary">🎥 Iniciar Escáner</button>
                     <button id="stopScannerBtn" onclick="app.detenerQrScanner()" class="btn-secondary" style="display: none;">⏹️ Detener Escáner</button>
                     <button onclick="app.cerrarQrScannerModal()">Cancelar</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Modal para devolución de herramientas -->
+        <div id="devolucionModal" class="modal">
+            <div class="modal-content devolucion-modal-content">
+                <div class="modal-header">
+                    <h3>🔄 Devolver Herramientas</h3>
+                    <button type="button" class="modal-close" onclick="app.cerrarDevolucionModal()">×</button>
+                </div>
+                <div id="devolucionTicketInfo">
+                    <!-- Información del ticket se cargará aquí -->
+                </div>
+                <div class="devolucion-scanner-section">
+                    <h4>📱 Escanear Herramienta a Devolver</h4>
+                    <button type="button" onclick="app.mostrarQrScannerModal()" class="btn-primary">
+                        🎥 Iniciar Escáner QR
+                    </button>
+                </div>
+                <div class="modal-buttons">
+                    <button onclick="app.cerrarDevolucionModal()">Cancelar</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Modal para confirmar cantidad de devolución -->
+        <div id="confirmacionDevolucionModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>🔄 Confirmar Devolución</h3>
+                    <button type="button" class="modal-close" onclick="app.cerrarConfirmacionDevolucion()">×</button>
+                </div>
+                <div id="confirmacionDevolucionInfo">
+                    <!-- Información de confirmación se cargará aquí -->
+                </div>
+                <div class="modal-buttons">
+                    <button onclick="app.confirmarDevolucion()" class="btn-primary">✅ Confirmar Devolución</button>
+                    <button onclick="app.cerrarConfirmacionDevolucion()">Cancelar</button>
                 </div>
             </div>
         </div>
