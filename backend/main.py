@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 import sqlite3
 import uvicorn
 from datetime import datetime, timedelta, timezone
@@ -16,6 +17,7 @@ import base64
 from io import BytesIO
 import barcode
 from barcode.writer import ImageWriter
+import ipaddress
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -24,10 +26,21 @@ logger = logging.getLogger(__name__)
 # Crear directorio de datos si no existe
 os.makedirs("../data", exist_ok=True)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    init_database()
+    print("✅ Base de datos inicializada")
+    print("🚀 Servidor listo en http://localhost:8000")
+    yield
+    # Shutdown
+    print("🛑 Servidor detenido")
+
 app = FastAPI(
     title="Sistema de Almacén Local",
     description="API para gestión de inventario en red local",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Configurar CORS para acceso desde tablet
@@ -419,6 +432,52 @@ async def get_barcode_producto(producto_id: int):
         return {"barcode": codigo_barras}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener código de barras: {str(e)}")
+
+@app.post("/api/productos/buscar")
+async def buscar_producto_por_codigo(datos: dict):
+    """Buscar un producto por su código de barras o QR"""
+    try:
+        codigo = datos.get("codigo")
+        if not codigo:
+            raise HTTPException(status_code=400, detail="El código es obligatorio")
+        
+        logger.info(f"Buscando producto con código: {codigo}")
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Buscar por código de barras exacto
+        cursor.execute("""
+            SELECT id, codigo_barras, nombre, descripcion, cantidad, 
+                   cantidad_minima, ubicacion, categoria, precio_unitario
+            FROM productos 
+            WHERE codigo_barras = ?
+        """, (codigo,))
+        producto = cursor.fetchone()
+        
+        # Si no se encuentra, buscar en el contenido del código QR
+        if not producto:
+            cursor.execute("""
+                SELECT id, codigo_barras, nombre, descripcion, cantidad, 
+                       cantidad_minima, ubicacion, categoria, precio_unitario
+                FROM productos 
+                WHERE codigo_qr LIKE ? OR nombre LIKE ?
+            """, (f"%{codigo}%", f"%{codigo}%"))
+            producto = cursor.fetchone()
+        
+        conn.close()
+        
+        if not producto:
+            raise HTTPException(status_code=404, detail="Producto no encontrado")
+        
+        logger.info(f"Producto encontrado: {producto['nombre']}")
+        return {"producto": dict(producto)}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error buscando producto: {e}")
+        raise HTTPException(status_code=500, detail=f"Error buscando producto: {str(e)}")
 
 def require_supervisor_or_operator(user):
     """Verificar que el usuario sea supervisor u operador"""
@@ -1494,12 +1553,103 @@ async def obtener_ticket(ticket_id: int, request: Request):
         logger.error(f"Error al obtener ticket {ticket_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Error al obtener ticket: {str(e)}")
 
-# Inicializar base de datos al arrancar
-@app.on_event("startup")
-async def startup_event():
-    init_database()
-    print("✅ Base de datos inicializada")
-    print("🚀 Servidor listo en http://localhost:8000")
-
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True) 
+    import ssl
+    import tempfile
+    import os
+    
+    # Crear certificado SSL autofirmado temporal
+    def create_self_signed_cert():
+        try:
+            from cryptography import x509
+            from cryptography.x509.oid import NameOID
+            from cryptography.hazmat.primitives import hashes, serialization
+            from cryptography.hazmat.primitives.asymmetric import rsa
+            from datetime import datetime, timedelta
+            
+            # Generar clave privada
+            private_key = rsa.generate_private_key(
+                public_exponent=65537,
+                key_size=2048,
+            )
+            
+            # Crear certificado
+            subject = issuer = x509.Name([
+                x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
+                x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "State"),
+                x509.NameAttribute(NameOID.LOCALITY_NAME, "City"),
+                x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Inventario Local"),
+                x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
+            ])
+            
+            cert = x509.CertificateBuilder().subject_name(
+                subject
+            ).issuer_name(
+                issuer
+            ).public_key(
+                private_key.public_key()
+            ).serial_number(
+                x509.random_serial_number()
+            ).not_valid_before(
+                datetime.utcnow()
+            ).not_valid_after(
+                datetime.utcnow() + timedelta(days=365)
+            ).add_extension(
+                x509.SubjectAlternativeName([
+                    x509.DNSName("localhost"),
+                    x509.IPAddress(ipaddress.IPv4Address("127.0.0.1")),
+                    x509.IPAddress(ipaddress.IPv4Address("192.168.1.134")),
+                ]),
+                critical=False,
+            ).sign(private_key, hashes.SHA256())
+            
+            # Guardar certificado y clave
+            cert_path = tempfile.NamedTemporaryFile(delete=False, suffix='.pem')
+            key_path = tempfile.NamedTemporaryFile(delete=False, suffix='.pem')
+            
+            cert_path.write(cert.public_bytes(serialization.Encoding.PEM))
+            key_path.write(private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ))
+            
+            cert_path.close()
+            key_path.close()
+            
+            return cert_path.name, key_path.name
+            
+        except ImportError:
+            print("⚠️  Para HTTPS, instale: pip install cryptography")
+            return None, None
+        except Exception as e:
+            print(f"⚠️  Error generando certificado SSL: {e}")
+            return None, None
+    
+    # Intentar crear certificado SSL
+    print("🔧 Configurando servidor...")
+    cert_file, key_file = create_self_signed_cert()
+    
+    if cert_file and key_file:
+        print("🔒 Iniciando servidor HTTPS...")
+        print("🌐 Acceda desde: https://192.168.1.134:8000")
+        print("📱 Para dispositivos móviles: https://192.168.1.134:8000")
+        print("💻 Para PC local: https://localhost:8000")
+        uvicorn.run(
+            app, 
+            host="0.0.0.0", 
+            port=8000, 
+            reload=False,  # Deshabilitar reload para evitar advertencias
+            ssl_keyfile=key_file,
+            ssl_certfile=cert_file
+        )
+    else:
+        print("⚠️  Iniciando servidor HTTP (cámara limitada)")
+        print("🌐 Acceda desde: http://localhost:8000 para usar la cámara")
+        print("📱 Para dispositivos móviles: Use HTTPS (no disponible)")
+        uvicorn.run(
+            app, 
+            host="0.0.0.0", 
+            port=8000, 
+            reload=False  # Deshabilitar reload para evitar advertencias
+        ) 
