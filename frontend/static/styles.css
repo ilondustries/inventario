@@ -1655,4 +1655,101 @@ body.modal-open {
         position: relative;
         z-index: 1;
     }
+}
+
+/* Estilos para modales de devolución */
+.devolucion-modal-content {
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.devolucion-instructions {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 15px 0;
+    border-left: 4px solid #667eea;
+}
+
+.devolucion-instructions p {
+    margin: 5px 0;
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.devolucion-scanner-section {
+    text-align: center;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin: 15px 0;
+}
+
+.devolucion-scanner-section h4 {
+    margin-bottom: 15px;
+    color: #333;
+}
+
+.producto-devolucion-info {
+    text-align: center;
+    padding: 20px;
+}
+
+.producto-devolucion-info h4 {
+    margin-bottom: 15px;
+    color: #333;
+}
+
+.cantidad-devolver-input {
+    width: 100px;
+    padding: 8px;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+    font-size: 1rem;
+    text-align: center;
+    margin: 10px 0;
+}
+
+.cantidad-devolver-input:focus {
+    border-color: #667eea;
+    outline: none;
+}
+
+.devolucion-note {
+    font-size: 0.8rem;
+    color: #666;
+    margin-top: 10px;
+}
+
+/* Estado devuelto para tickets */
+.ticket-card.devuelto {
+    border-left-color: #28a745;
+    background: linear-gradient(135deg, #f8fff9 0%, #e8f5e8 100%);
+}
+
+.ticket-estado.devuelto {
+    background: #28a745;
+    color: white;
+}
+
+/* Responsive para modales de devolución */
+@media (max-width: 768px) {
+    .devolucion-modal-content {
+        max-width: 95vw;
+        max-height: 90vh;
+    }
+    
+    .devolucion-scanner-section {
+        padding: 15px;
+    }
+    
+    .producto-devolucion-info {
+        padding: 15px;
+    }
+    
+    .cantidad-devolver-input {
+        width: 80px;
+        font-size: 0.9rem;
+    }
 } 
