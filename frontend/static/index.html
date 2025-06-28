@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Control de Herramienta Longoria Tooling</title>
-    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="/static/styles.css?v=1.2">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔧</text></svg>">
+    <script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+    <script src="/static/app.js?v=1.8"></script>
 </head>
 <body>
     <div class="container">
@@ -33,8 +35,21 @@
         </header>
         
         <div class="main-content">
+            <!-- Menú de navegación para administradores -->
+            <div id="adminMenu" class="admin-menu" style="display: none;">
+                <button class="menu-tab active" data-section="form-section" onclick="app.cambiarSeccion('form-section')">
+                    🛠️ Gestión de Herramientas
+                </button>
+                <button class="menu-tab" data-section="products-section" onclick="app.cambiarSeccion('products-section')">
+                    📋 Inventario
+                </button>
+                <button class="menu-tab" data-section="tickets-section" onclick="app.cambiarSeccion('tickets-section')">
+                    🎫 Tickets de Compra
+                </button>
+            </div>
+            
             <!-- Formulario para agregar/editar productos -->
-            <div class="form-section">
+            <div class="form-section content-section active">
                 <h2 id="formTitle">➕ Agregar Herramienta</h2>
                 <form id="productoForm">
                     <input type="hidden" id="productoId" value="">
@@ -81,7 +96,7 @@
             </div>
             
             <!-- Lista de productos -->
-            <div class="products-section">
+            <div class="products-section content-section">
                 <div class="section-header">
                     <h2>📋 Inventario de Herramientas</h2>
                     <div class="search-bar">
@@ -95,7 +110,7 @@
             </div>
             
             <!-- Sistema de Tickets de Compra -->
-            <div class="tickets-section">
+            <div class="tickets-section content-section">
                 <div class="section-header">
                     <h2>🎫 Tickets de Compra</h2>
                     <button id="nuevoTicketBtn" class="btn-primary" onclick="app.mostrarFormularioTicket()">
@@ -109,10 +124,16 @@
             </div>
         </div>
         
+        <!-- Notificaciones -->
+        <div id="notification" class="notification"></div>
+        
         <!-- Modal de confirmación -->
         <div id="confirmModal" class="modal">
             <div class="modal-content">
-                <h3>Confirmar Acción</h3>
+                <div class="modal-header">
+                    <h3>Confirmar Acción</h3>
+                    <button type="button" class="modal-close" onclick="app.cerrarModal()">×</button>
+                </div>
                 <p id="confirmMessage"></p>
                 <div class="modal-buttons">
                     <button id="confirmYes" class="btn-danger">Sí, eliminar</button>
@@ -121,13 +142,13 @@
             </div>
         </div>
         
-        <!-- Notificaciones -->
-        <div id="notification" class="notification"></div>
-        
         <!-- Modal para mostrar QR de producto -->
         <div id="qrModal" class="modal">
             <div class="modal-content qr-modal-content">
-                <h3>Código QR de la Herramienta</h3>
+                <div class="modal-header">
+                    <h3>Código QR de la Herramienta</h3>
+                    <button type="button" class="modal-close" onclick="app.cerrarQrModal()">×</button>
+                </div>
                 <div id="qrProductoInfo"></div>
                 <img id="qrProductoImg" src="" alt="QR de la herramienta" style="display:block;margin:0 auto;max-width:250px;max-height:250px;"/>
                 <div class="modal-buttons">
@@ -140,7 +161,10 @@
         <!-- Modal para crear/editar ticket -->
         <div id="ticketModal" class="modal">
             <div class="modal-content ticket-modal-content">
-                <h3 id="ticketModalTitle">🎫 Nuevo Ticket de Compra</h3>
+                <div class="modal-header">
+                    <h3 id="ticketModalTitle">🎫 Nuevo Ticket de Compra</h3>
+                    <button type="button" class="modal-close" onclick="app.cerrarTicketModal()">×</button>
+                </div>
                 <form id="ticketForm">
                     <div class="input-group">
                         <label for="ordenProduccion">Orden de Producción: *</label>
@@ -158,7 +182,7 @@
                             <!-- Items del ticket se agregarán aquí -->
                         </div>
                         <button type="button" id="agregarItemBtn" class="btn-secondary" onclick="app.agregarItemTicket()">
-                            ➕ Agregar Herramienta
+                            📱 Escanear Herramienta
                         </button>
                     </div>
                     
@@ -173,7 +197,10 @@
         <!-- Modal para ver detalles del ticket -->
         <div id="ticketDetalleModal" class="modal">
             <div class="modal-content ticket-detalle-content">
-                <h3 id="ticketDetalleTitle">🎫 Detalles del Ticket</h3>
+                <div class="modal-header">
+                    <h3 id="ticketDetalleTitle">🎫 Detalles del Ticket</h3>
+                    <button type="button" class="modal-close" onclick="app.cerrarTodosLosModales()">×</button>
+                </div>
                 <div id="ticketDetalleInfo">
                     <!-- Información del ticket se cargará aquí -->
                 </div>
@@ -186,7 +213,10 @@
         <!-- Modal para aprobar/rechazar ticket -->
         <div id="ticketDecisionModal" class="modal">
             <div class="modal-content">
-                <h3 id="ticketDecisionTitle">📋 Decisión del Ticket</h3>
+                <div class="modal-header">
+                    <h3 id="ticketDecisionTitle">📋 Decisión del Ticket</h3>
+                    <button type="button" class="modal-close" onclick="app.cerrarDecisionModal()">×</button>
+                </div>
                 <form id="ticketDecisionForm">
                     <div class="input-group">
                         <label for="decisionAccion">Acción:</label>
@@ -212,7 +242,10 @@
         <!-- Modal para entregar ticket -->
         <div id="ticketEntregaModal" class="modal">
             <div class="modal-content ticket-entrega-content">
-                <h3>📦 Entregar Herramientas</h3>
+                <div class="modal-header">
+                    <h3>📦 Entregar Herramientas</h3>
+                    <button type="button" class="modal-close" onclick="app.cerrarEntregaModal()">×</button>
+                </div>
                 <div id="ticketEntregaItems">
                     <!-- Items para entregar se cargarán aquí -->
                 </div>
@@ -222,8 +255,34 @@
                 </div>
             </div>
         </div>
+        
+        <!-- Modal para escáner de códigos QR -->
+        <div id="qrScannerModal" class="modal">
+            <div class="modal-content qr-scanner-content">
+                <div class="modal-header">
+                    <h3>📱 Escanear Código QR</h3>
+                    <button type="button" class="modal-close" onclick="app.cerrarQrScannerModal()">×</button>
+                </div>
+                <div class="scanner-container">
+                    <div id="qrScannerInfo" class="scanner-info">
+                        <p>📱 Posicione el código QR de la herramienta frente a la cámara</p>
+                        <p>💡 Asegúrese de que el código esté bien iluminado</p>
+                    </div>
+                    <div id="qrScannerVideo" class="scanner-video">
+                        <video id="qrVideo" autoplay playsinline></video>
+                        <canvas id="qrCanvas" style="display: none;"></canvas>
+                    </div>
+                    <div id="qrScannerStatus" class="scanner-status">
+                        <span id="scannerStatusText">🔄 Iniciando escáner...</span>
+                    </div>
+                </div>
+                <div class="modal-buttons">
+                    <button id="startScannerBtn" onclick="app.iniciarQrScanner()" class="btn-primary">🎥 Iniciar Escáner</button>
+                    <button id="stopScannerBtn" onclick="app.detenerQrScanner()" class="btn-secondary" style="display: none;">⏹️ Detener Escáner</button>
+                    <button onclick="app.cerrarQrScannerModal()">Cancelar</button>
+                </div>
+            </div>
+        </div>
     </div>
-    
-    <script src="/static/app.js"></script>
 </body>
 </html> 
