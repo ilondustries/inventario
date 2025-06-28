@@ -482,6 +482,11 @@ class AlmacenApp {
                 <button onclick="app.eliminarProducto(${producto.id})" class="btn-delete" title="Eliminar">🗑️</button>
             ` : '';
             
+            // Solo mostrar botón QR para administradores
+            const qrButton = isAdmin ? `
+                <button onclick="app.mostrarQrProducto(${producto.id})" class="btn-qr" title="Ver QR">🔳 QR</button>
+            ` : '';
+            
             card.innerHTML = `
                 <div class="producto-info">
                     <h3>${producto.nombre}</h3>
@@ -495,7 +500,7 @@ class AlmacenApp {
                 </div>
                 <div class="producto-actions">
                     ${actionButtons}
-                    <button onclick="app.mostrarQrProducto(${producto.id})" class="btn-qr" title="Ver QR">🔳 QR</button>
+                    ${qrButton}
                 </div>
             `;
             
@@ -871,6 +876,16 @@ class AlmacenApp {
     renderTicketActions(ticket) {
         const actions = [];
         
+        console.log('🔍 Renderizando acciones para ticket:', {
+            ticketId: ticket.id,
+            estado: ticket.estado,
+            solicitante_id: ticket.solicitante_id,
+            currentUser: {
+                id: this.currentUser.id,
+                rol: this.currentUser.rol
+            }
+        });
+        
         if (this.currentUser.rol === 'admin') {
             if (ticket.estado === 'pendiente') {
                 actions.push('<button onclick="event.stopPropagation(); app.mostrarDecisionModal(' + ticket.id + ')" class="btn-primary">📋 Revisar</button>');
@@ -879,10 +894,35 @@ class AlmacenApp {
             }
         }
         
-        if (ticket.estado === 'pendiente' && ticket.solicitante_id === this.currentUser.id) {
+        // Botón de devolución para supervisores y operadores en tickets entregados
+        console.log('🔍 Verificando condiciones para botón de devolución:', {
+            estadoEsEntregado: ticket.estado === 'entregado',
+            usuarioEsSupervisorOOperador: ['supervisor', 'operador'].includes(this.currentUser.rol),
+            usuarioEsSupervisor: this.currentUser.rol === 'supervisor',
+            usuarioEsSolicitante: Number(ticket.solicitante_id) === Number(this.currentUser.id),
+            solicitante_id: ticket.solicitante_id,
+            currentUser_id: this.currentUser.id,
+            solicitante_id_type: typeof ticket.solicitante_id,
+            currentUser_id_type: typeof this.currentUser.id
+        });
+        
+        if (ticket.estado === 'entregado' && ['supervisor', 'operador'].includes(this.currentUser.rol)) {
+            // Verificar que el usuario sea el solicitante o supervisor
+            if (this.currentUser.rol === 'supervisor' || Number(ticket.solicitante_id) === Number(this.currentUser.id)) {
+                console.log('✅ Agregando botón de devolución para ticket', ticket.id);
+                actions.push('<button onclick="event.stopPropagation(); app.mostrarDevolucionModal(' + ticket.id + ')" class="btn-secondary">🔄 Devolver</button>');
+            } else {
+                console.log('❌ No se agrega botón de devolución - usuario no es solicitante ni supervisor');
+            }
+        } else {
+            console.log('❌ No se agrega botón de devolución - condiciones no cumplidas');
+        }
+        
+        if (ticket.estado === 'pendiente' && Number(ticket.solicitante_id) === Number(this.currentUser.id)) {
             actions.push('<button onclick="event.stopPropagation(); app.cancelarTicket(' + ticket.id + ')" class="btn-danger">❌ Cancelar</button>');
         }
         
+        console.log('🔍 Acciones generadas:', actions);
         return actions.join('');
     }
     
@@ -1139,8 +1179,15 @@ class AlmacenApp {
         statusText.textContent = `✅ Producto detectado: ${producto.nombre}`;
         statusDiv.className = 'scanner-status success';
         
-        // Agregar el producto al ticket
-        this.agregarProductoAlTicket(producto);
+        // Verificar si estamos en modo devolución
+        const devolucionModal = document.getElementById('devolucionModal');
+        if (devolucionModal && devolucionModal.style.display === 'flex') {
+            // Modo devolución
+            this.procesarDevolucionQR(producto);
+        } else {
+            // Modo creación de ticket
+            this.agregarProductoAlTicket(producto);
+        }
         
         // Cerrar el modal después de un momento
         setTimeout(() => {
@@ -1150,31 +1197,55 @@ class AlmacenApp {
     
     agregarProductoAlTicket(producto) {
         const itemsList = document.getElementById('ticketItemsList');
-        const itemId = Date.now();
         
-        const itemHtml = `
-            <div class="ticket-item-form" data-item-id="${itemId}" data-producto-id="${producto.id}">
-                <div class="input-row">
-                    <div class="input-group">
-                        <label>Herramienta:</label>
-                        <input type="text" value="${producto.nombre}" readonly style="background: #f8f9fa;">
+        // Verificar si el producto ya existe en el ticket
+        const existingItem = document.querySelector(`[data-producto-id="${producto.id}"]`);
+        
+        if (existingItem) {
+            // Si el producto ya existe, incrementar la cantidad
+            const cantidadInput = existingItem.querySelector('.cantidad-input');
+            const currentQuantity = parseInt(cantidadInput.value) || 0;
+            const newQuantity = currentQuantity + 1;
+            
+            cantidadInput.value = newQuantity;
+            
+            // Mostrar notificación de cantidad actualizada
+            this.showNotification(`✅ ${producto.nombre} - Cantidad actualizada a ${newQuantity}`, 'success');
+            
+            // Efecto visual de actualización
+            cantidadInput.style.backgroundColor = '#d4edda';
+            setTimeout(() => {
+                cantidadInput.style.backgroundColor = '';
+            }, 500);
+            
+        } else {
+            // Si el producto no existe, crear nueva entrada
+            const itemId = Date.now();
+            
+            const itemHtml = `
+                <div class="ticket-item-form" data-item-id="${itemId}" data-producto-id="${producto.id}">
+                    <div class="input-row">
+                        <div class="input-group">
+                            <label>Herramienta:</label>
+                            <input type="text" value="${producto.nombre}" readonly style="background: #f8f9fa;">
+                        </div>
+                        <div class="input-group">
+                            <label>Cantidad:</label>
+                            <input type="number" class="cantidad-input" min="1" value="1" required>
+                        </div>
+                        <div class="input-group">
+                            <label>Precio Unit.:</label>
+                            <input type="number" class="precio-input" min="0" step="0.01" value="${producto.precio_unitario || ''}" readonly style="background: #f8f9fa;">
+                        </div>
+                        <button type="button" class="btn-remove-item" onclick="app.removerItemTicket(${itemId})">❌</button>
                     </div>
-                    <div class="input-group">
-                        <label>Cantidad:</label>
-                        <input type="number" class="cantidad-input" min="1" value="1" required>
-                    </div>
-                    <div class="input-group">
-                        <label>Precio Unit.:</label>
-                        <input type="number" class="precio-input" min="0" step="0.01" value="${producto.precio_unitario || ''}" readonly style="background: #f8f9fa;">
-                    </div>
-                    <button type="button" class="btn-remove-item" onclick="app.removerItemTicket(${itemId})">❌</button>
                 </div>
-            </div>
-        `;
-        
-        itemsList.insertAdjacentHTML('beforeend', itemHtml);
-        
-        this.showNotification(`✅ ${producto.nombre} agregado al ticket`, 'success');
+            `;
+            
+            itemsList.insertAdjacentHTML('beforeend', itemHtml);
+            
+            this.showNotification(`✅ ${producto.nombre} agregado al ticket`, 'success');
+        }
     }
     
     removerItemTicket(itemId) {
@@ -1186,35 +1257,64 @@ class AlmacenApp {
     
     async crearTicket() {
         try {
+            console.log('🔍 Iniciando creación de ticket...');
+            
             // Validar formulario
             const ordenProduccion = document.getElementById('ordenProduccion').value.trim();
             const justificacion = document.getElementById('justificacion').value.trim();
+            
+            console.log('📝 Datos del formulario:', { ordenProduccion, justificacion });
             
             if (!ordenProduccion || !justificacion) {
                 this.showNotification('Por favor complete todos los campos obligatorios', 'error');
                 return;
             }
             
-            // Recolectar items
+            // Recolectar items (solo productos escaneados)
             const items = [];
             const itemForms = document.querySelectorAll('.ticket-item-form');
             
+            console.log('🔍 Encontrados', itemForms.length, 'formularios de items');
+            
             for (const form of itemForms) {
-                const productoSelect = form.querySelector('.producto-select');
+                console.log('🔍 Procesando formulario:', form);
+                console.log('🔍 Data attributes:', form.dataset);
+                
                 const cantidadInput = form.querySelector('.cantidad-input');
                 const precioInput = form.querySelector('.precio-input');
                 
-                if (productoSelect.value && cantidadInput.value) {
-                    items.push({
-                        producto_id: parseInt(productoSelect.value),
+                console.log('🔍 Inputs encontrados:', { 
+                    cantidadInput: cantidadInput ? 'Sí' : 'No',
+                    precioInput: precioInput ? 'Sí' : 'No'
+                });
+                
+                // Obtener el ID del producto desde el data attribute
+                const productoId = parseInt(form.dataset.productoId);
+                
+                console.log('🔍 Producto ID extraído:', productoId);
+                
+                if (productoId && cantidadInput && cantidadInput.value) {
+                    const item = {
+                        producto_id: productoId,
                         cantidad_solicitada: parseInt(cantidadInput.value),
-                        precio_unitario: precioInput.value ? parseFloat(precioInput.value) : null
+                        precio_unitario: precioInput && precioInput.value ? parseFloat(precioInput.value) : null
+                    };
+                    
+                    console.log('✅ Item agregado:', item);
+                    items.push(item);
+                } else {
+                    console.log('❌ Item no válido:', { 
+                        productoId, 
+                        cantidadInput: cantidadInput ? cantidadInput.value : 'No encontrado',
+                        cantidadInputExists: !!cantidadInput
                     });
                 }
             }
             
+            console.log('📦 Total de items válidos:', items.length);
+            
             if (items.length === 0) {
-                this.showNotification('Debe agregar al menos una herramienta al ticket', 'error');
+                this.showNotification('Debe agregar al menos una herramienta al ticket (escanee códigos QR)', 'error');
                 return;
             }
             
@@ -1224,6 +1324,8 @@ class AlmacenApp {
                 justificacion: justificacion,
                 items: items
             };
+            
+            console.log('📤 Enviando ticket:', ticketData);
             
             const response = await fetch(`${this.apiUrl}/tickets`, {
                 method: 'POST',
@@ -1244,7 +1346,7 @@ class AlmacenApp {
             this.loadTickets();
             
         } catch (error) {
-            console.error('Error creando ticket:', error);
+            console.error('❌ Error creando ticket:', error);
             this.showNotification(error.message, 'error');
         }
     }
@@ -1449,16 +1551,151 @@ class AlmacenApp {
     }
     
     async cancelarTicket(ticketId) {
-        if (!confirm('¿Está seguro de que desea cancelar este ticket?')) {
-            return;
-        }
-        
         try {
-            // Por ahora, solo permitimos cancelar tickets pendientes
-            this.showNotification('Función de cancelación en desarrollo', 'info');
+            const response = await fetch(`${this.apiUrl}/tickets/${ticketId}/cancelar`, {
+                method: 'PUT'
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Error al cancelar ticket');
+            }
+            
+            this.showNotification('Ticket cancelado exitosamente', 'success');
+            this.loadTickets();
+            
         } catch (error) {
             console.error('Error cancelando ticket:', error);
-            this.showNotification('Error al cancelar ticket', 'error');
+            this.showNotification(error.message, 'error');
+        }
+    }
+    
+    async mostrarDevolucionModal(ticketId) {
+        try {
+            // Obtener detalles del ticket
+            const response = await fetch(`${this.apiUrl}/tickets/${ticketId}`);
+            if (!response.ok) throw new Error('Error al obtener ticket');
+            
+            const ticket = await response.json();
+            this.currentTicketId = ticketId;
+            
+            // Mostrar modal de devolución
+            document.getElementById('devolucionModal').style.display = 'flex';
+            document.getElementById('devolucionTicketInfo').innerHTML = `
+                <div class="ticket-info">
+                    <p><strong>Ticket:</strong> ${ticket.numero_ticket}</p>
+                    <p><strong>Orden:</strong> ${ticket.orden_produccion}</p>
+                    <p><strong>Estado:</strong> <span class="ticket-estado ${ticket.estado}">${ticket.estado}</span></p>
+                </div>
+                <div class="devolucion-instructions">
+                    <p>📱 Escanee el código QR de la herramienta que desea devolver</p>
+                    <p>💡 Puede devolver parcialmente las herramientas entregadas</p>
+                </div>
+            `;
+            
+            // Prevenir scroll del body
+            document.body.classList.add('modal-open');
+            
+        } catch (error) {
+            console.error('Error mostrando modal de devolución:', error);
+            this.showNotification('Error al cargar información del ticket', 'error');
+        }
+    }
+    
+    cerrarDevolucionModal() {
+        document.getElementById('devolucionModal').style.display = 'none';
+        this.currentTicketId = null;
+        // Restaurar scroll del body
+        document.body.classList.remove('modal-open');
+    }
+    
+    async procesarDevolucionQR(producto) {
+        try {
+            if (!this.currentTicketId) {
+                this.showNotification('Error: No hay ticket seleccionado', 'error');
+                return;
+            }
+            
+            // Mostrar modal de confirmación de cantidad
+            this.mostrarConfirmacionDevolucion(producto);
+            
+        } catch (error) {
+            console.error('Error procesando devolución:', error);
+            this.showNotification('Error al procesar devolución', 'error');
+        }
+    }
+    
+    mostrarConfirmacionDevolucion(producto) {
+        const modal = document.getElementById('confirmacionDevolucionModal');
+        const infoDiv = document.getElementById('confirmacionDevolucionInfo');
+        
+        infoDiv.innerHTML = `
+            <div class="producto-devolucion-info">
+                <h4>🔄 Confirmar Devolución</h4>
+                <p><strong>Herramienta:</strong> ${producto.nombre}</p>
+                <p><strong>Cantidad a devolver:</strong></p>
+                <input type="number" id="cantidadDevolver" min="1" value="1" class="cantidad-devolver-input">
+                <p class="devolucion-note">💡 Ingrese la cantidad que desea devolver</p>
+            </div>
+        `;
+        
+        modal.style.display = 'flex';
+        document.body.classList.add('modal-open');
+        
+        // Guardar producto para usar en la confirmación
+        this.productoDevolucion = producto;
+    }
+    
+    cerrarConfirmacionDevolucion() {
+        document.getElementById('confirmacionDevolucionModal').style.display = 'none';
+        this.productoDevolucion = null;
+        document.body.classList.remove('modal-open');
+    }
+    
+    async confirmarDevolucion() {
+        try {
+            if (!this.currentTicketId || !this.productoDevolucion) {
+                this.showNotification('Error: Información incompleta', 'error');
+                return;
+            }
+            
+            const cantidad = parseInt(document.getElementById('cantidadDevolver').value);
+            if (!cantidad || cantidad <= 0) {
+                this.showNotification('Por favor ingrese una cantidad válida', 'error');
+                return;
+            }
+            
+            const devolucionData = {
+                codigo: `ID:${this.productoDevolucion.id}|Nombre:${this.productoDevolucion.nombre}`,
+                cantidad: cantidad
+            };
+            
+            const response = await fetch(`${this.apiUrl}/tickets/${this.currentTicketId}/devolver`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(devolucionData)
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Error al procesar devolución');
+            }
+            
+            const result = await response.json();
+            this.showNotification(result.mensaje, 'success');
+            
+            // Cerrar modales
+            this.cerrarConfirmacionDevolucion();
+            this.cerrarDevolucionModal();
+            
+            // Recargar tickets
+            this.loadTickets();
+            
+        } catch (error) {
+            console.error('Error confirmando devolución:', error);
+            this.showNotification(error.message, 'error');
         }
     }
     
