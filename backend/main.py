@@ -36,10 +36,17 @@ async def lifespan(app: FastAPI):
     branch = os.getenv("BRANCH", "main")
     environment = os.getenv("ENVIRONMENT", "development")
     
+    # Definir nombre de base de datos según la rama
+    if branch.lower() == "desarrollo":
+        db_name = "almacen_desarrollo.db"
+    else:
+        db_name = "almacen_main.db"
+    
     print("✅ Base de datos inicializada")
     print(f"🚀 Servidor listo en http://localhost:{port}")
     print(f"🌿 Rama: {branch.upper()}")
     print(f"🔧 Entorno: {environment}")
+    print(f"🗄️  Base de datos: {db_name}")
     
     yield
     # Shutdown
@@ -75,7 +82,17 @@ SESSION_CONFIG = {
 # Función para obtener conexión a la base de datos
 def get_db_connection():
     try:
-        conn = sqlite3.connect("../data/almacen.db", timeout=60.0)  # Aumentar timeout a 60 segundos
+        # Obtener nombre de la rama desde variable de entorno o detectar automáticamente
+        branch = os.getenv("BRANCH", "main")
+        
+        # Definir nombre de base de datos según la rama
+        if branch.lower() == "desarrollo":
+            db_name = "almacen_desarrollo.db"
+        else:
+            db_name = "almacen_main.db"
+        
+        db_path = f"../data/{db_name}"
+        conn = sqlite3.connect(db_path, timeout=60.0)  # Aumentar timeout a 60 segundos
         conn.row_factory = sqlite3.Row  # Permite acceso por nombre de columna
         # Configurar para mejor rendimiento y evitar bloqueos
         conn.execute("PRAGMA journal_mode=WAL")
@@ -267,17 +284,12 @@ def init_database():
             cursor.execute("ALTER TABLE productos ADD COLUMN codigo_qr TEXT")
             logger.info("Columna codigo_qr agregada a tabla productos")
         
-        # Crear índices para rendimiento
+        # Crear índices para rendimiento (solo para tablas que ya existen)
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_productos_nombre ON productos(nombre)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_productos_ubicacion ON productos(ubicacion)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_historial_producto ON historial(producto_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_usuarios_username ON usuarios(username)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_sesiones_token ON sesiones(token)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_tickets_solicitante ON tickets_compra(solicitante_id)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_tickets_estado ON tickets_compra(estado)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_tickets_fecha ON tickets_compra(fecha_solicitud)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_ticket_items_ticket ON ticket_items(ticket_id)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_ticket_items_producto ON ticket_items(producto_id)')
         
         # Crear usuario administrador por defecto si no existe
         cursor.execute("SELECT COUNT(*) FROM usuarios WHERE username = 'admin'")
@@ -329,6 +341,13 @@ def init_database():
                 FOREIGN KEY (producto_id) REFERENCES productos (id)
             )
         ''')
+        
+        # Crear índices para tablas de tickets (después de crear las tablas)
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_tickets_solicitante ON tickets_compra(solicitante_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_tickets_estado ON tickets_compra(estado)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_tickets_fecha ON tickets_compra(fecha_solicitud)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_ticket_items_ticket ON ticket_items(ticket_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_ticket_items_producto ON ticket_items(producto_id)')
         
         conn.commit()
         conn.close()
