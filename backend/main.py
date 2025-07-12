@@ -30,8 +30,17 @@ os.makedirs("../data", exist_ok=True)
 async def lifespan(app: FastAPI):
     # Startup
     init_database()
+    
+    # Obtener configuración de variables de entorno
+    port = int(os.getenv("PORT", 8000))
+    branch = os.getenv("BRANCH", "main")
+    environment = os.getenv("ENVIRONMENT", "development")
+    
     print("✅ Base de datos inicializada")
-    print("🚀 Servidor listo en http://localhost:8000")
+    print(f"🚀 Servidor listo en http://localhost:{port}")
+    print(f"🌿 Rama: {branch.upper()}")
+    print(f"🔧 Entorno: {environment}")
+    
     yield
     # Shutdown
     print("🛑 Servidor detenido")
@@ -1761,6 +1770,9 @@ if __name__ == "__main__":
     import tempfile
     import os
     
+    # Obtener puerto desde variable de entorno o usar 8443 por defecto
+    PORT = int(os.getenv("PORT", 8443))
+    
     # Crear certificado SSL autofirmado temporal
     def create_self_signed_cert():
         try:
@@ -1841,7 +1853,7 @@ if __name__ == "__main__":
         uvicorn.run(
             app, 
             host="0.0.0.0", 
-            port=8000, 
+            port=PORT, 
             reload=False,  # Deshabilitar reload para evitar advertencias
             ssl_keyfile=key_file,
             ssl_certfile=cert_file
@@ -1853,6 +1865,6 @@ if __name__ == "__main__":
         uvicorn.run(
             app, 
             host="0.0.0.0", 
-            port=8000, 
+            port=PORT, 
             reload=False  # Deshabilitar reload para evitar advertencias
         ) 
