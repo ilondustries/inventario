@@ -30,8 +30,19 @@ os.makedirs("../data", exist_ok=True)
 async def lifespan(app: FastAPI):
     # Startup
     init_database()
+    
+    # Obtener información de la rama y base de datos
+    branch = get_current_git_branch()
+    if branch.lower() == "desarrollo":
+        db_name = "almacen_desarrollo.db"
+    else:
+        db_name = "almacen_main.db"
+    
     print("✅ Base de datos inicializada")
+    print(f"🌿 Rama Git: {branch}")
+    print(f"🗄️  Base de datos: {db_name}")
     print("🚀 Servidor listo en http://localhost:8000")
+    
     yield
     # Shutdown
     print("🛑 Servidor detenido")
@@ -63,10 +74,58 @@ SESSION_CONFIG = {
     "log_all_logouts": True        # Registrar todos los logouts en historial
 }
 
+# Función para detectar la rama Git actual
+def get_current_git_branch():
+    """Detecta la rama Git actual"""
+    try:
+        import subprocess
+        import os
+        
+        # Intentar desde el directorio actual
+        result = subprocess.run(['git', 'branch', '--show-current'], 
+                              capture_output=True, text=True, cwd='.')
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+        
+        # Intentar desde el directorio padre
+        result = subprocess.run(['git', 'branch', '--show-current'], 
+                              capture_output=True, text=True, cwd='..')
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+        
+        # Fallback: intentar con git rev-parse desde directorio actual
+        result = subprocess.run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], 
+                              capture_output=True, text=True, cwd='.')
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+        
+        # Fallback: intentar con git rev-parse desde directorio padre
+        result = subprocess.run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], 
+                              capture_output=True, text=True, cwd='..')
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+            
+    except Exception as e:
+        logger.warning(f"No se pudo detectar la rama Git: {e}")
+    
+    return "main"  # Rama por defecto
+
 # Función para obtener conexión a la base de datos
 def get_db_connection():
     try:
-        conn = sqlite3.connect("../data/almacen.db", timeout=60.0)  # Aumentar timeout a 60 segundos
+        # Detectar rama Git actual
+        branch = get_current_git_branch()
+        
+        # Definir nombre de base de datos según la rama
+        if branch.lower() == "desarrollo":
+            db_name = "almacen_desarrollo.db"
+        else:
+            db_name = "almacen_main.db"
+        
+        db_path = f"../data/{db_name}"
+        logger.info(f"Conectando a base de datos: {db_path} (rama: {branch})")
+        
+        conn = sqlite3.connect(db_path, timeout=60.0)  # Aumentar timeout a 60 segundos
         conn.row_factory = sqlite3.Row  # Permite acceso por nombre de columna
         # Configurar para mejor rendimiento y evitar bloqueos
         conn.execute("PRAGMA journal_mode=WAL")
