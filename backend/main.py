@@ -32,14 +32,17 @@ async def lifespan(app: FastAPI):
     init_database()
     
     # Obtener información de la rama y base de datos
-    branch = get_current_git_branch()
+    branch = os.getenv("BRANCH")
+    if not branch:
+        branch = get_current_git_branch()
+    
     if branch.lower() == "desarrollo":
         db_name = "almacen_desarrollo.db"
     else:
         db_name = "almacen_main.db"
     
     print("✅ Base de datos inicializada")
-    print(f"🌿 Rama Git: {branch}")
+    print(f"🌿 Rama configurada: {branch}")
     print(f"🗄️  Base de datos: {db_name}")
     print("🚀 Servidor listo en http://localhost:8000")
     
@@ -113,8 +116,11 @@ def get_current_git_branch():
 # Función para obtener conexión a la base de datos
 def get_db_connection():
     try:
-        # Detectar rama Git actual
-        branch = get_current_git_branch()
+        # Priorizar variable de entorno BRANCH sobre detección automática
+        branch = os.getenv("BRANCH")
+        if not branch:
+            # Si no hay variable de entorno, detectar rama Git actual
+            branch = get_current_git_branch()
         
         # Definir nombre de base de datos según la rama
         if branch.lower() == "desarrollo":
