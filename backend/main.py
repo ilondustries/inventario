@@ -1898,26 +1898,29 @@ if __name__ == "__main__":
     print("🔧 Configurando servidor...")
     cert_file, key_file = create_self_signed_cert()
     
+    # Obtener puerto desde variable de entorno
+    port = int(os.getenv("PORT", "8000"))
+    
     if cert_file and key_file:
         print("🔒 Iniciando servidor HTTPS...")
-        print("🌐 Acceda desde: https://192.168.1.134:8000")
-        print("📱 Para dispositivos móviles: https://192.168.1.134:8000")
-        print("💻 Para PC local: https://localhost:8000")
+        print(f"🌐 Acceda desde: https://192.168.1.134:{port}")
+        print(f"📱 Para dispositivos móviles: https://192.168.1.134:{port}")
+        print(f"💻 Para PC local: https://localhost:{port}")
         uvicorn.run(
             app, 
             host="0.0.0.0", 
-            port=8000, 
+            port=port, 
             reload=False,  # Deshabilitar reload para evitar advertencias
             ssl_keyfile=key_file,
             ssl_certfile=cert_file
         )
     else:
         print("⚠️  Iniciando servidor HTTP (cámara limitada)")
-        print("🌐 Acceda desde: http://localhost:8000 para usar la cámara")
+        print(f"🌐 Acceda desde: http://localhost:{port} para usar la cámara")
         print("📱 Para dispositivos móviles: Use HTTPS (no disponible)")
         uvicorn.run(
             app, 
             host="0.0.0.0", 
-            port=8000, 
+            port=port, 
             reload=False  # Deshabilitar reload para evitar advertencias
         ) 
