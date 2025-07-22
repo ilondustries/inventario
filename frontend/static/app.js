@@ -952,6 +952,14 @@ class AlmacenApp {
     }
     
     mostrarQrScannerModal() {
+        console.log('🔄 mostrarQrScannerModal llamado');
+        console.log('🆔 currentTicketId antes de abrir escáner:', this.currentTicketId);
+        
+        // Verificar si hay modal de devolución abierto
+        const devolucionModal = document.getElementById('devolucionModal');
+        const devolucionAbierto = devolucionModal && devolucionModal.style.display === 'flex';
+        console.log('🔍 Modal de devolución abierto:', devolucionAbierto);
+        
         console.log('🔍 Verificando compatibilidad de cámara...');
         console.log('navigator.mediaDevices:', navigator.mediaDevices);
         console.log('navigator.mediaDevices.getUserMedia:', navigator.mediaDevices?.getUserMedia);
@@ -989,8 +997,13 @@ class AlmacenApp {
         document.getElementById('startScannerBtn').style.display = 'inline-block';
         document.getElementById('stopScannerBtn').style.display = 'none';
         
-        // Prevenir scroll del body
-        document.body.classList.add('modal-open');
+        // NO restaurar scroll del body si hay otros modales abiertos
+        if (!devolucionAbierto) {
+            document.body.classList.add('modal-open');
+        }
+        
+        console.log('✅ Modal de escáner QR mostrado');
+        console.log('🆔 currentTicketId después de abrir escáner:', this.currentTicketId);
         
         // Mejoras específicas para móviles
         const isMobile = window.innerWidth <= 768;
@@ -1129,10 +1142,19 @@ class AlmacenApp {
     }
     
     cerrarQrScannerModal() {
+        console.log('🔄 cerrarQrScannerModal llamado');
+        console.log('🆔 currentTicketId antes de cerrar:', this.currentTicketId);
+        
         this.detenerQrScanner();
         document.getElementById('qrScannerModal').style.display = 'none';
-        // Restaurar scroll del body
-        document.body.classList.remove('modal-open');
+        
+        // Solo restaurar scroll del body si no hay otros modales abiertos
+        const devolucionModal = document.getElementById('devolucionModal');
+        if (!devolucionModal || devolucionModal.style.display !== 'flex') {
+            document.body.classList.remove('modal-open');
+        }
+        
+        console.log('🆔 currentTicketId después de cerrar:', this.currentTicketId);
     }
     
     procesarCodigoQR(qrData) {
@@ -1173,18 +1195,22 @@ class AlmacenApp {
     }
     
     productoEscaneado(producto) {
+        console.log('🔄 productoEscaneado llamado con:', producto);
+        console.log('🆔 currentTicketId:', this.currentTicketId);
+        
         const statusText = document.getElementById('scannerStatusText');
         const statusDiv = document.getElementById('qrScannerStatus');
         
         statusText.textContent = `✅ Producto detectado: ${producto.nombre}`;
         statusDiv.className = 'scanner-status success';
         
-        // Verificar si estamos en modo devolución
-        const devolucionModal = document.getElementById('devolucionModal');
-        if (devolucionModal && devolucionModal.style.display === 'flex') {
+        // Verificar si estamos en modo devolución usando currentTicketId
+        if (this.currentTicketId) {
+            console.log('✅ Modo devolución detectado (currentTicketId presente), llamando a procesarDevolucionQR');
             // Modo devolución
             this.procesarDevolucionQR(producto);
         } else {
+            console.log('📝 Modo creación de ticket detectado (sin currentTicketId), llamando a agregarProductoAlTicket');
             // Modo creación de ticket
             this.agregarProductoAlTicket(producto);
         }
@@ -1196,26 +1222,28 @@ class AlmacenApp {
     }
     
     agregarProductoAlTicket(producto) {
+        console.log('🔄 agregarProductoAlTicket llamado con:', producto);
+        
         const itemsList = document.getElementById('ticketItemsList');
         
         // Verificar si el producto ya existe en el ticket
         const existingItem = document.querySelector(`[data-producto-id="${producto.id}"]`);
         
         if (existingItem) {
-            // Si el producto ya existe, incrementar la cantidad
-            const cantidadInput = existingItem.querySelector('.cantidad-input');
-            const currentQuantity = parseInt(cantidadInput.value) || 0;
-            const newQuantity = currentQuantity + 1;
+            // Si el producto ya existe, incrementar la cantidad de escaneos
+            const cantidadSpan = existingItem.querySelector('.cantidad-escaneos');
+            const currentScans = parseInt(cantidadSpan.textContent) || 0;
+            const newScans = currentScans + 1;
             
-            cantidadInput.value = newQuantity;
+            cantidadSpan.textContent = newScans;
             
-            // Mostrar notificación de cantidad actualizada
-            this.showNotification(`✅ ${producto.nombre} - Cantidad actualizada a ${newQuantity}`, 'success');
+            // Mostrar notificación de escaneo adicional
+            this.showNotification(`✅ ${producto.nombre} - Escaneado ${newScans} veces`, 'success');
             
             // Efecto visual de actualización
-            cantidadInput.style.backgroundColor = '#d4edda';
+            cantidadSpan.style.backgroundColor = '#d4edda';
             setTimeout(() => {
-                cantidadInput.style.backgroundColor = '';
+                cantidadSpan.style.backgroundColor = '';
             }, 500);
             
         } else {
@@ -1230,8 +1258,8 @@ class AlmacenApp {
                             <input type="text" value="${producto.nombre}" readonly style="background: #f8f9fa;">
                         </div>
                         <div class="input-group">
-                            <label>Cantidad:</label>
-                            <input type="number" class="cantidad-input" min="1" value="1" required>
+                            <label>Escaneos:</label>
+                            <span class="cantidad-escaneos" style="font-weight: bold; color: #28a745; font-size: 1.1em;">1</span>
                         </div>
                         <div class="input-group">
                             <label>Precio Unit.:</label>
@@ -1244,7 +1272,7 @@ class AlmacenApp {
             
             itemsList.insertAdjacentHTML('beforeend', itemHtml);
             
-            this.showNotification(`✅ ${producto.nombre} agregado al ticket`, 'success');
+            this.showNotification(`✅ ${producto.nombre} agregado al ticket (1 escaneo)`, 'success');
         }
     }
     
@@ -1280,12 +1308,10 @@ class AlmacenApp {
                 console.log('🔍 Procesando formulario:', form);
                 console.log('🔍 Data attributes:', form.dataset);
                 
-                const cantidadInput = form.querySelector('.cantidad-input');
-                const precioInput = form.querySelector('.precio-input');
+                const cantidadSpan = form.querySelector('.cantidad-escaneos');
                 
                 console.log('🔍 Inputs encontrados:', { 
-                    cantidadInput: cantidadInput ? 'Sí' : 'No',
-                    precioInput: precioInput ? 'Sí' : 'No'
+                    cantidadSpan: cantidadSpan ? 'Sí' : 'No',
                 });
                 
                 // Obtener el ID del producto desde el data attribute
@@ -1293,11 +1319,11 @@ class AlmacenApp {
                 
                 console.log('🔍 Producto ID extraído:', productoId);
                 
-                if (productoId && cantidadInput && cantidadInput.value) {
+                if (productoId && cantidadSpan && cantidadSpan.textContent) {
                     const item = {
                         producto_id: productoId,
-                        cantidad_solicitada: parseInt(cantidadInput.value),
-                        precio_unitario: precioInput && precioInput.value ? parseFloat(precioInput.value) : null
+                        cantidad_solicitada: parseInt(cantidadSpan.textContent),
+                        precio_unitario: null // Precio unitario no se maneja aquí, se asume que es fijo o se calcula en backend
                     };
                     
                     console.log('✅ Item agregado:', item);
@@ -1305,8 +1331,8 @@ class AlmacenApp {
                 } else {
                     console.log('❌ Item no válido:', { 
                         productoId, 
-                        cantidadInput: cantidadInput ? cantidadInput.value : 'No encontrado',
-                        cantidadInputExists: !!cantidadInput
+                        cantidadSpan: cantidadSpan ? cantidadSpan.textContent : 'No encontrado',
+                        cantidadSpanExists: !!cantidadSpan
                     });
                 }
             }
@@ -1572,41 +1598,79 @@ class AlmacenApp {
     
     async mostrarDevolucionModal(ticketId) {
         try {
+            console.log('🔄 mostrarDevolucionModal llamado con ticketId:', ticketId);
+            
             // Obtener detalles del ticket
             const response = await fetch(`${this.apiUrl}/tickets/${ticketId}`);
             if (!response.ok) throw new Error('Error al obtener ticket');
             
             const ticket = await response.json();
+            console.log('📋 Ticket obtenido:', ticket);
+            
             this.currentTicketId = ticketId;
+            console.log('🆔 currentTicketId establecido:', this.currentTicketId);
             
             // Mostrar modal de devolución
-            document.getElementById('devolucionModal').style.display = 'flex';
+            const devolucionModal = document.getElementById('devolucionModal');
+            console.log('🔍 devolucionModal encontrado:', devolucionModal);
+            
+            devolucionModal.style.display = 'flex';
+            console.log('✅ Modal de devolución mostrado con display: flex');
+            
+            // Generar HTML para las herramientas entregadas
+            const herramientasEntregadas = ticket.items.filter(item => item.cantidad_entregada > 0);
+            const herramientasHTML = herramientasEntregadas.map(item => {
+                const cantidadPendiente = item.cantidad_entregada - (item.cantidad_devuelta || 0);
+                return `
+                    <div class="herramienta-entregada">
+                        <span class="herramienta-nombre">${item.producto_nombre}</span>
+                        <span class="herramienta-cantidad">
+                            Entregadas: ${item.cantidad_entregada} | 
+                            Devueltas: ${item.cantidad_devuelta || 0} | 
+                            Pendientes: ${cantidadPendiente}
+                        </span>
+                    </div>
+                `;
+            }).join('');
+            
             document.getElementById('devolucionTicketInfo').innerHTML = `
                 <div class="ticket-info">
                     <p><strong>Ticket:</strong> ${ticket.numero_ticket}</p>
                     <p><strong>Orden:</strong> ${ticket.orden_produccion}</p>
                     <p><strong>Estado:</strong> <span class="ticket-estado ${ticket.estado}">${ticket.estado}</span></p>
                 </div>
+                <div class="herramientas-entregadas">
+                    <h4>🛠️ Herramientas Entregadas</h4>
+                    ${herramientasHTML}
+                </div>
                 <div class="devolucion-instructions">
                     <p>📱 Escanee el código QR de la herramienta que desea devolver</p>
-                    <p>💡 Puede devolver parcialmente las herramientas entregadas</p>
+                    <p>💡 Cada escaneo devuelve 1 unidad de la herramienta</p>
+                    <p>🔄 Puede escanear múltiples veces la misma herramienta</p>
                 </div>
             `;
             
             // Prevenir scroll del body
             document.body.classList.add('modal-open');
+            console.log('✅ Modal de devolución configurado completamente');
             
         } catch (error) {
-            console.error('Error mostrando modal de devolución:', error);
+            console.error('❌ Error mostrando modal de devolución:', error);
             this.showNotification('Error al cargar información del ticket', 'error');
         }
     }
     
     cerrarDevolucionModal() {
+        console.log('🔄 cerrarDevolucionModal llamado');
+        console.log('🆔 currentTicketId antes de cerrar:', this.currentTicketId);
+        
         document.getElementById('devolucionModal').style.display = 'none';
         this.currentTicketId = null;
+        
         // Restaurar scroll del body
         document.body.classList.remove('modal-open');
+        
+        console.log('🆔 currentTicketId después de cerrar:', this.currentTicketId);
     }
     
     async procesarDevolucionQR(producto) {
@@ -1626,16 +1690,26 @@ class AlmacenApp {
     }
     
     mostrarConfirmacionDevolucion(producto) {
+        console.log('📋 mostrarConfirmacionDevolucion llamado con:', producto);
+        
         const modal = document.getElementById('confirmacionDevolucionModal');
         const infoDiv = document.getElementById('confirmacionDevolucionInfo');
+        
+        console.log('🔍 Modal encontrado:', modal);
+        console.log('🔍 InfoDiv encontrado:', infoDiv);
+        
+        if (!modal || !infoDiv) {
+            console.error('❌ Modal o infoDiv no encontrado');
+            this.showNotification('Error: Modal de confirmación no encontrado', 'error');
+            return;
+        }
         
         infoDiv.innerHTML = `
             <div class="producto-devolucion-info">
                 <h4>🔄 Confirmar Devolución</h4>
                 <p><strong>Herramienta:</strong> ${producto.nombre}</p>
-                <p><strong>Cantidad a devolver:</strong></p>
-                <input type="number" id="cantidadDevolver" min="1" value="1" class="cantidad-devolver-input">
-                <p class="devolucion-note">💡 Ingrese la cantidad que desea devolver</p>
+                <p><strong>Cantidad a devolver:</strong> <span class="cantidad-devolver">1 unidad</span></p>
+                <p class="devolucion-note">💡 Cada escaneo devuelve 1 unidad de la herramienta</p>
             </div>
         `;
         
@@ -1644,6 +1718,8 @@ class AlmacenApp {
         
         // Guardar producto para usar en la confirmación
         this.productoDevolucion = producto;
+        
+        console.log('✅ Modal de confirmación mostrado');
     }
     
     cerrarConfirmacionDevolucion() {
@@ -1654,21 +1730,27 @@ class AlmacenApp {
     
     async confirmarDevolucion() {
         try {
+            console.log('🔄 confirmarDevolucion llamado');
+            console.log('🆔 currentTicketId:', this.currentTicketId);
+            console.log('📦 productoDevolucion:', this.productoDevolucion);
+            
             if (!this.currentTicketId || !this.productoDevolucion) {
+                console.error('❌ Información incompleta para devolución');
                 this.showNotification('Error: Información incompleta', 'error');
                 return;
             }
             
-            const cantidad = parseInt(document.getElementById('cantidadDevolver').value);
-            if (!cantidad || cantidad <= 0) {
-                this.showNotification('Por favor ingrese una cantidad válida', 'error');
-                return;
-            }
+            // Siempre usar cantidad 1 para trazabilidad
+            const cantidad = 1;
+            console.log('📊 Cantidad a devolver (fija):', cantidad);
             
             const devolucionData = {
                 codigo: `ID:${this.productoDevolucion.id}|Nombre:${this.productoDevolucion.nombre}`,
                 cantidad: cantidad
             };
+            
+            console.log('📤 Enviando devolución:', devolucionData);
+            console.log('🌐 URL:', `${this.apiUrl}/tickets/${this.currentTicketId}/devolver`);
             
             const response = await fetch(`${this.apiUrl}/tickets/${this.currentTicketId}/devolver`, {
                 method: 'POST',
@@ -1678,12 +1760,17 @@ class AlmacenApp {
                 body: JSON.stringify(devolucionData)
             });
             
+            console.log('📥 Status:', response.status);
+            console.log('📥 OK:', response.ok);
+            
             if (!response.ok) {
                 const error = await response.json();
+                console.error('❌ Error del servidor:', error);
                 throw new Error(error.detail || 'Error al procesar devolución');
             }
             
             const result = await response.json();
+            console.log('✅ Resultado exitoso:', result);
             this.showNotification(result.mensaje, 'success');
             
             // Cerrar modales
@@ -1694,7 +1781,7 @@ class AlmacenApp {
             this.loadTickets();
             
         } catch (error) {
-            console.error('Error confirmando devolución:', error);
+            console.error('❌ Error confirmando devolución:', error);
             this.showNotification(error.message, 'error');
         }
     }
