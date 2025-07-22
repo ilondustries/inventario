@@ -592,6 +592,11 @@ button[type="submit"]:hover {
     -webkit-overflow-scrolling: touch;
 }
 
+/* Modal del escáner QR con z-index más alto */
+#qrScannerModal {
+    z-index: 1002;
+}
+
 /* Prevenir scroll del body cuando modal está abierto */
 body.modal-open {
     overflow: hidden;
@@ -657,9 +662,10 @@ body.modal-open {
     border-radius: 8px;
     color: white;
     font-weight: bold;
-    z-index: 1001;
+    z-index: 1003;
     transform: translateX(400px);
     transition: transform 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 
 .notification.show {
@@ -1669,87 +1675,103 @@ body.modal-open {
     padding: 15px;
     border-radius: 8px;
     margin: 15px 0;
-    border-left: 4px solid #667eea;
 }
 
 .devolucion-instructions p {
     margin: 5px 0;
     color: #666;
-    font-size: 0.9rem;
 }
 
 .devolucion-scanner-section {
-    text-align: center;
-    padding: 20px;
-    background: #f8f9fa;
+    background: #e3f2fd;
+    padding: 15px;
     border-radius: 8px;
     margin: 15px 0;
+    text-align: center;
 }
 
 .devolucion-scanner-section h4 {
-    margin-bottom: 15px;
-    color: #333;
+    margin-bottom: 10px;
+    color: #1976d2;
 }
 
 .producto-devolucion-info {
-    text-align: center;
-    padding: 20px;
+    text-align: left;
 }
 
 .producto-devolucion-info h4 {
-    margin-bottom: 15px;
     color: #333;
+    margin-bottom: 15px;
+}
+
+.cantidad-devolver {
+    font-weight: bold;
+    color: #28a745;
+    font-size: 1.1em;
 }
 
 .cantidad-devolver-input {
-    width: 100px;
-    padding: 8px;
+    width: 100%;
+    padding: 10px;
     border: 2px solid #ddd;
     border-radius: 5px;
-    font-size: 1rem;
-    text-align: center;
+    font-size: 16px;
     margin: 10px 0;
 }
 
 .cantidad-devolver-input:focus {
     border-color: #667eea;
     outline: none;
+    box-shadow: 0 0 5px rgba(102, 126, 234, 0.3);
 }
 
 .devolucion-note {
-    font-size: 0.8rem;
+    font-style: italic;
     color: #666;
     margin-top: 10px;
 }
 
-/* Estado devuelto para tickets */
+/* Estilos para herramientas entregadas */
+.herramientas-entregadas {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 15px 0;
+}
+
+.herramientas-entregadas h4 {
+    color: #333;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.herramienta-entregada {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background: white;
+    border-radius: 5px;
+    margin: 5px 0;
+    border-left: 4px solid #28a745;
+}
+
+.herramienta-nombre {
+    font-weight: bold;
+    color: #333;
+}
+
+.herramienta-cantidad {
+    font-size: 0.9em;
+    color: #666;
+}
+
+/* Estados de tickets */
 .ticket-card.devuelto {
-    border-left-color: #28a745;
-    background: linear-gradient(135deg, #f8fff9 0%, #e8f5e8 100%);
+    border-left: 4px solid #6c757d;
 }
 
 .ticket-estado.devuelto {
-    background: #28a745;
+    background: #6c757d;
     color: white;
-}
-
-/* Responsive para modales de devolución */
-@media (max-width: 768px) {
-    .devolucion-modal-content {
-        max-width: 95vw;
-        max-height: 90vh;
-    }
-    
-    .devolucion-scanner-section {
-        padding: 15px;
-    }
-    
-    .producto-devolucion-info {
-        padding: 15px;
-    }
-    
-    .cantidad-devolver-input {
-        width: 80px;
-        font-size: 0.9rem;
-    }
 } 
