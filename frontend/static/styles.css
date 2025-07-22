@@ -1066,17 +1066,41 @@ body.modal-open {
 
 .ticket-item-form .input-group {
     margin-bottom: 0;
+    flex: 1;
 }
 
 .ticket-item-form label {
-    font-size: 0.9rem;
+    font-weight: bold;
+    color: #333;
     margin-bottom: 5px;
 }
 
 .ticket-item-form input,
-.ticket-item-form select {
+.ticket-item-form span {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.cantidad-escaneos {
+    display: inline-block;
     padding: 8px 12px;
-    font-size: 0.9rem;
+    background: #e8f5e8;
+    border: 2px solid #28a745;
+    border-radius: 4px;
+    font-weight: bold;
+    color: #28a745;
+    font-size: 1.1em;
+    text-align: center;
+    min-width: 60px;
+    transition: all 0.3s ease;
+}
+
+.cantidad-escaneos:hover {
+    background: #d4edda;
+    transform: scale(1.05);
 }
 
 .btn-remove-item {
