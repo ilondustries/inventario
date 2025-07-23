@@ -46,6 +46,9 @@
                 <button class="menu-tab" data-section="tickets-section" onclick="app.cambiarSeccion('tickets-section')">
                     🎫 Tickets de Compra
                 </button>
+                <button class="menu-tab" data-section="historial-section" onclick="app.cambiarSeccion('historial-section')">
+                    📊 Historial
+                </button>
             </div>
             
             <!-- Formulario para agregar/editar productos -->
@@ -120,6 +123,30 @@
                 
                 <div id="ticketsList" class="tickets-grid">
                     <!-- Los tickets se cargarán aquí dinámicamente -->
+                </div>
+            </div>
+            
+            <!-- Historial de Actividades -->
+            <div class="historial-section content-section">
+                <div class="section-header">
+                    <h2>📊 Historial de Actividades</h2>
+                    <div class="historial-filters">
+                        <select id="historialAccionFilter" onchange="app.filtrarHistorial()">
+                            <option value="">Todas las acciones</option>
+                            <option value="crear">Crear producto</option>
+                            <option value="actualizar">Actualizar producto</option>
+                            <option value="eliminar">Eliminar producto</option>
+                            <option value="devolucion_buen_estado">Devolución (Buen Estado)</option>
+                            <option value="devolucion_mal_estado">Devolución (Mal Estado)</option>
+                            <option value="devolucion">Devolución (General)</option>
+                            <option value="entrega">Entrega de ticket</option>
+                        </select>
+                        <button onclick="app.cargarHistorial()" class="btn-secondary">🔄 Actualizar</button>
+                    </div>
+                </div>
+                
+                <div id="historialList" class="historial-list">
+                    <!-- El historial se cargará aquí dinámicamente -->
                 </div>
             </div>
         </div>
@@ -301,6 +328,7 @@
                     </button>
                 </div>
                 <div class="modal-buttons">
+                    <button onclick="app.confirmarTodasDevoluciones()" class="btn-primary">✅ Confirmar Todas las Devoluciones</button>
                     <button onclick="app.cerrarDevolucionModal()">Cancelar</button>
                 </div>
             </div>
