@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import sqlite3
@@ -18,6 +18,13 @@ from io import BytesIO
 import barcode
 from barcode.writer import ImageWriter
 import ipaddress
+import tempfile
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -380,11 +387,20 @@ def init_database():
                 producto_nombre TEXT NOT NULL,
                 cantidad_solicitada INTEGER NOT NULL,
                 cantidad_entregada INTEGER DEFAULT 0,
+                cantidad_devuelta INTEGER DEFAULT 0,
                 precio_unitario REAL,
                 FOREIGN KEY (ticket_id) REFERENCES tickets_compra (id) ON DELETE CASCADE,
                 FOREIGN KEY (producto_id) REFERENCES productos (id)
             )
         ''')
+        
+        # Verificar si la columna cantidad_devuelta existe, si no, agregarla
+        cursor.execute("PRAGMA table_info(ticket_items)")
+        columnas_ticket_items = [column[1] for column in cursor.fetchall()]
+        
+        if 'cantidad_devuelta' not in columnas_ticket_items:
+            cursor.execute("ALTER TABLE ticket_items ADD COLUMN cantidad_devuelta INTEGER DEFAULT 0")
+            logger.info("Columna cantidad_devuelta agregada a tabla ticket_items")
         
         conn.commit()
         conn.close()
@@ -1313,6 +1329,7 @@ async def crear_ticket_compra(ticket: dict, request: Request):
         logger.info(f"Ticket {numero_ticket} creado exitosamente por {current_user['username']} con {len(items)} herramientas")
         return {
             "mensaje": "Ticket de compra creado exitosamente",
+            "id": ticket_id,
             "numero_ticket": numero_ticket,
             "total_herramientas": len(items)
         }
@@ -1648,13 +1665,31 @@ async def obtener_ticket(ticket_id: int, request: Request):
         # Obtener items del ticket
         cursor.execute("""
             SELECT ti.id, ti.producto_id, ti.producto_nombre, ti.cantidad_solicitada, 
-                   ti.cantidad_entregada, ti.precio_unitario
+                   ti.cantidad_entregada, ti.cantidad_devuelta, ti.precio_unitario
             FROM ticket_items ti
             WHERE ti.ticket_id = ?
             ORDER BY ti.producto_nombre
         """, (ticket_id,))
         
         ticket["items"] = [dict(item) for item in cursor.fetchall()]
+        
+        # Obtener fecha de devolución y usuario que devolvió desde el historial
+        cursor.execute("""
+            SELECT h.fecha, h.usuario_nombre
+            FROM historial h
+            WHERE h.accion IN ('devolucion_buen_estado', 'devolucion_mal_estado', 'devolucion')
+            AND h.detalles LIKE ?
+            ORDER BY h.fecha DESC
+            LIMIT 1
+        """, (f"%{ticket['numero_ticket']}%",))
+        
+        devolucion_result = cursor.fetchone()
+        if devolucion_result:
+            ticket["fecha_devolucion"] = devolucion_result[0]
+            ticket["devuelto_por_nombre"] = devolucion_result[1]
+        else:
+            ticket["fecha_devolucion"] = None
+            ticket["devuelto_por_nombre"] = None
         
         conn.close()
         
@@ -1665,6 +1700,238 @@ async def obtener_ticket(ticket_id: int, request: Request):
     except Exception as e:
         logger.error(f"Error al obtener ticket {ticket_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Error al obtener ticket: {str(e)}")
+
+def generar_pdf_ticket(ticket_data: dict) -> bytes:
+    """Generar PDF del ticket con información completa"""
+    try:
+        # Crear archivo temporal
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+            doc = SimpleDocTemplate(tmp_file.name, pagesize=A4)
+            story = []
+            
+            # Estilos
+            styles = getSampleStyleSheet()
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=18,
+                spaceAfter=30,
+                alignment=TA_CENTER,
+                textColor=colors.darkblue
+            )
+            
+            subtitle_style = ParagraphStyle(
+                'CustomSubtitle',
+                parent=styles['Heading2'],
+                fontSize=14,
+                spaceAfter=20,
+                alignment=TA_CENTER,
+                textColor=colors.darkblue
+            )
+            
+            normal_style = styles['Normal']
+            bold_style = ParagraphStyle(
+                'Bold',
+                parent=styles['Normal'],
+                fontSize=12,
+                spaceAfter=6,
+                fontName='Helvetica-Bold'
+            )
+            
+            # Título
+            story.append(Paragraph("SISTEMA DE ALMACÉN", title_style))
+            story.append(Paragraph("COMPROBANTE DE SOLICITUD", subtitle_style))
+            story.append(Spacer(1, 20))
+            
+            # Información de generación
+            story.append(Paragraph(f"<b>Documento generado:</b> {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", normal_style))
+            story.append(Spacer(1, 15))
+            
+            # Información del ticket
+            story.append(Paragraph(f"<b>Número de Ticket:</b> {ticket_data['numero_ticket']}", normal_style))
+            story.append(Paragraph(f"<b>Orden de Producción:</b> {ticket_data['orden_produccion']}", normal_style))
+            story.append(Paragraph(f"<b>Estado:</b> {ticket_data['estado'].upper()}", normal_style))
+            story.append(Paragraph(f"<b>Justificación:</b> {ticket_data['justificacion']}", normal_style))
+            story.append(Spacer(1, 15))
+            
+            # Información del solicitante
+            story.append(Paragraph("<b>INFORMACIÓN DEL SOLICITANTE</b>", bold_style))
+            story.append(Paragraph(f"<b>Nombre:</b> {ticket_data['solicitante_nombre']}", normal_style))
+            story.append(Paragraph(f"<b>Rol:</b> {ticket_data['solicitante_rol']}", normal_style))
+            story.append(Paragraph(f"<b>Fecha de Solicitud:</b> {ticket_data['fecha_solicitud']}", normal_style))
+            story.append(Spacer(1, 15))
+            
+            # Información de aprobación (si existe)
+            if ticket_data.get('aprobador_nombre'):
+                story.append(Paragraph("<b>INFORMACIÓN DE APROBACIÓN</b>", bold_style))
+                story.append(Paragraph(f"<b>Aprobado por:</b> {ticket_data['aprobador_nombre']}", normal_style))
+                story.append(Paragraph(f"<b>Fecha de Aprobación:</b> {ticket_data['fecha_aprobacion']}", normal_style))
+                if ticket_data.get('comentarios_aprobador'):
+                    story.append(Paragraph(f"<b>Comentarios:</b> {ticket_data['comentarios_aprobador']}", normal_style))
+                story.append(Spacer(1, 15))
+            
+            # Información de entrega (si existe)
+            if ticket_data.get('entregado_por_nombre'):
+                story.append(Paragraph("<b>INFORMACIÓN DE ENTREGA</b>", bold_style))
+                story.append(Paragraph(f"<b>Entregado por:</b> {ticket_data['entregado_por_nombre']}", normal_style))
+                story.append(Paragraph(f"<b>Fecha de Entrega:</b> {ticket_data['fecha_entrega']}", normal_style))
+                story.append(Spacer(1, 15))
+            
+            # Información de devolución (si existe)
+            if ticket_data.get('devuelto_por_nombre'):
+                story.append(Paragraph("<b>INFORMACIÓN DE DEVOLUCIÓN</b>", bold_style))
+                story.append(Paragraph(f"<b>Devuelto por:</b> {ticket_data['devuelto_por_nombre']}", normal_style))
+                story.append(Paragraph(f"<b>Fecha de Devolución:</b> {ticket_data['fecha_devolucion']}", normal_style))
+                story.append(Spacer(1, 15))
+            
+            # Tabla de herramientas
+            story.append(Paragraph("<b>HERRAMIENTAS SOLICITADAS</b>", bold_style))
+            
+            if ticket_data.get('items'):
+                # Preparar datos para la tabla
+                table_data = [
+                    ['Herramienta', 'Solicitado', 'Entregado', 'Devuelto', 'Precio Unit.']
+                ]
+                
+                for item in ticket_data['items']:
+                    cantidad_devuelta = item.get('cantidad_devuelta', 0) or 0
+                    table_data.append([
+                        item['producto_nombre'],
+                        str(item['cantidad_solicitada']),
+                        str(item.get('cantidad_entregada', 0) or 0),
+                        str(cantidad_devuelta),
+                        f"${item.get('precio_unitario', 0) or 0:.2f}"
+                    ])
+                
+                # Crear tabla
+                table = Table(table_data, colWidths=[2.5*inch, 1*inch, 1*inch, 1*inch, 1.2*inch])
+                table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 12),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 1), (-1, -1), 10),
+                    ('ALIGN', (1, 1), (-1, -1), 'CENTER'),  # Centrar números
+                    ('ALIGN', (0, 1), (0, -1), 'LEFT'),      # Alinear texto a la izquierda
+                ]))
+                
+                story.append(table)
+                story.append(Spacer(1, 20))
+            
+            # Pie de página
+            story.append(Paragraph("<b>NOTAS IMPORTANTES:</b>", bold_style))
+            story.append(Paragraph("• Este documento es un comprobante oficial de la solicitud de herramientas.", normal_style))
+            story.append(Paragraph("• La información contenida en este PDF no puede ser alterada.", normal_style))
+            story.append(Paragraph("• Para consultas o aclaraciones, contacte al administrador del sistema.", normal_style))
+            story.append(Paragraph(f"• Documento generado el: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", normal_style))
+            
+            # Generar PDF
+            doc.build(story)
+            
+            # Leer el archivo generado
+            with open(tmp_file.name, 'rb') as pdf_file:
+                pdf_content = pdf_file.read()
+            
+            # Cerrar el documento para liberar el archivo
+            doc = None
+            
+            # Eliminar archivo temporal (con manejo de errores)
+            try:
+                os.unlink(tmp_file.name)
+            except OSError as e:
+                logger.warning(f"No se pudo eliminar archivo temporal {tmp_file.name}: {e}")
+            
+            return pdf_content
+            
+    except Exception as e:
+        logger.error(f"Error generando PDF: {e}")
+        raise HTTPException(status_code=500, detail=f"Error generando PDF: {str(e)}")
+
+@app.get("/api/tickets/{ticket_id}/pdf")
+async def descargar_pdf_ticket(ticket_id: int, request: Request):
+    """Descargar PDF del ticket"""
+    try:
+        current_user = get_current_user(request)
+        require_auth(current_user)
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Obtener ticket principal
+        cursor.execute("""
+            SELECT 
+                t.id, t.numero_ticket, t.orden_produccion, t.justificacion,
+                t.solicitante_id, t.solicitante_nombre, t.solicitante_rol, t.estado,
+                t.fecha_solicitud, t.fecha_aprobacion, t.aprobador_nombre,
+                t.comentarios_aprobador, t.fecha_entrega, t.entregado_por_nombre
+            FROM tickets_compra t
+            WHERE t.id = ?
+        """, (ticket_id,))
+        
+        ticket = cursor.fetchone()
+        if not ticket:
+            raise HTTPException(status_code=404, detail="Ticket no encontrado")
+        
+        # Convertir a diccionario
+        ticket = dict(ticket)
+        
+        # Verificar permisos
+        if current_user["rol"] not in ["admin"] and ticket["solicitante_id"] != current_user["id"]:
+            raise HTTPException(status_code=403, detail="No tienes permisos para descargar este ticket")
+        
+        # Obtener items del ticket
+        cursor.execute("""
+            SELECT ti.id, ti.producto_id, ti.producto_nombre, ti.cantidad_solicitada, 
+                   ti.cantidad_entregada, ti.cantidad_devuelta, ti.precio_unitario
+            FROM ticket_items ti
+            WHERE ti.ticket_id = ?
+            ORDER BY ti.producto_nombre
+        """, (ticket_id,))
+        
+        ticket["items"] = [dict(item) for item in cursor.fetchall()]
+        
+        # Obtener fecha de devolución y usuario que devolvió desde el historial
+        cursor.execute("""
+            SELECT h.fecha, h.usuario_nombre
+            FROM historial h
+            WHERE h.accion IN ('devolucion_buen_estado', 'devolucion_mal_estado', 'devolucion')
+            AND h.detalles LIKE ?
+            ORDER BY h.fecha DESC
+            LIMIT 1
+        """, (f"%{ticket['numero_ticket']}%",))
+        
+        devolucion_result = cursor.fetchone()
+        if devolucion_result:
+            ticket["fecha_devolucion"] = devolucion_result[0]
+            ticket["devuelto_por_nombre"] = devolucion_result[1]
+        else:
+            ticket["fecha_devolucion"] = None
+            ticket["devuelto_por_nombre"] = None
+        
+        conn.close()
+        
+        # Generar PDF
+        pdf_content = generar_pdf_ticket(ticket)
+        
+        # Devolver PDF como respuesta
+        return Response(
+            content=pdf_content,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename=ticket_{ticket['numero_ticket']}.pdf"
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error al generar PDF del ticket {ticket_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al generar PDF: {str(e)}")
 
 @app.post("/api/tickets/{ticket_id}/devolver")
 async def devolver_ticket(ticket_id: int, devolucion: dict, request: Request):
@@ -1721,7 +1988,7 @@ async def devolver_ticket(ticket_id: int, devolucion: dict, request: Request):
         # Verificar que el producto esté en el ticket
         cursor.execute("""
             SELECT ti.id, ti.producto_id, ti.producto_nombre, ti.cantidad_solicitada, 
-                   ti.cantidad_entregada, p.cantidad as stock_actual
+                   ti.cantidad_entregada, ti.cantidad_devuelta, p.cantidad as stock_actual
             FROM ticket_items ti
             JOIN productos p ON ti.producto_id = p.id
             WHERE ti.ticket_id = ? AND ti.producto_id = ?
@@ -1745,37 +2012,50 @@ async def devolver_ticket(ticket_id: int, devolucion: dict, request: Request):
         if cantidad_devolver > item["cantidad_entregada"]:
             raise HTTPException(status_code=400, detail=f"Solo se pueden devolver hasta {item['cantidad_entregada']} unidades")
         
-        # Procesar devolución
-        nueva_cantidad_entregada = item["cantidad_entregada"] - cantidad_devolver
+        # Obtener estado de la devolución (por defecto "buen_estado")
+        estado_devolucion = devolucion.get("estado", "buen_estado")
+        if estado_devolucion not in ["buen_estado", "mal_estado"]:
+            raise HTTPException(status_code=400, detail="Estado de devolución inválido")
         
-        # Actualizar cantidad entregada en el ticket
+        # Procesar devolución - mantener contadores independientes
+        cantidad_devuelta_actual = item["cantidad_devuelta"] if item["cantidad_devuelta"] is not None else 0
+        nueva_cantidad_devuelta = cantidad_devuelta_actual + cantidad_devolver
+        
+        # Solo actualizar cantidad_devuelta, mantener cantidad_entregada fija
         cursor.execute("""
             UPDATE ticket_items 
-            SET cantidad_entregada = ?
+            SET cantidad_devuelta = ?
             WHERE id = ?
-        """, (nueva_cantidad_entregada, item["id"]))
+        """, (nueva_cantidad_devuelta, item["id"]))
         
-        # Actualizar stock del producto
-        nuevo_stock = item["stock_actual"] + cantidad_devolver
-        cursor.execute("""
-            UPDATE productos 
-            SET cantidad = ?, fecha_actualizacion = CURRENT_TIMESTAMP
-            WHERE id = ?
-        """, (nuevo_stock, producto_id))
+        # Actualizar stock del producto solo si está en buen estado
+        nuevo_stock = item["stock_actual"]
+        if estado_devolucion == "buen_estado":
+            nuevo_stock += cantidad_devolver
+            cursor.execute("""
+                UPDATE productos 
+                SET cantidad = ?, fecha_actualizacion = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (nuevo_stock, producto_id))
+        
+        # Si está en mal estado, no se actualiza el stock (se considera desecho)
         
         # Registrar en historial
         try:
+            accion_historial = "devolucion_buen_estado" if estado_devolucion == "buen_estado" else "devolucion_mal_estado"
+            detalles_historial = f"Devolución de ticket {ticket['numero_ticket']} - {cantidad_devolver} unidades ({estado_devolucion})"
+            
             cursor.execute("""
                 INSERT INTO historial (accion, producto_id, cantidad_anterior, cantidad_nueva, usuario_id, usuario_nombre, detalles)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (
-                "devolucion", 
+                accion_historial, 
                 producto_id, 
                 item["stock_actual"], 
                 nuevo_stock, 
                 current_user["id"], 
                 current_user["nombre_completo"],
-                f"Devolución de ticket {ticket['numero_ticket']} - {cantidad_devolver} unidades"
+                detalles_historial
             ))
         except sqlite3.OperationalError as e:
             logger.warning(f"Error registrando devolución en historial: {e}")
@@ -1784,15 +2064,18 @@ async def devolver_ticket(ticket_id: int, devolucion: dict, request: Request):
         cursor.execute("""
             SELECT 
                 SUM(cantidad_solicitada) as total_solicitado,
-                SUM(cantidad_entregada) as total_entregado
+                SUM(cantidad_entregada) as total_entregado,
+                SUM(cantidad_devuelta) as total_devuelto
             FROM ticket_items 
             WHERE ticket_id = ?
         """, (ticket_id,))
         
         totales = dict(cursor.fetchone())
+        total_entregado = totales["total_entregado"] or 0
+        total_devuelto = totales["total_devuelto"] or 0
         
-        # Si todos los items fueron devueltos, cambiar estado a "devuelto"
-        nuevo_estado = "devuelto" if totales["total_entregado"] == 0 else "entregado"
+        # Si todo lo entregado fue devuelto, cambiar estado a "devuelto"
+        nuevo_estado = "devuelto" if total_devuelto >= total_entregado and total_entregado > 0 else "entregado"
         
         if nuevo_estado == "devuelto":
             cursor.execute("""
@@ -1804,15 +2087,19 @@ async def devolver_ticket(ticket_id: int, devolucion: dict, request: Request):
         conn.commit()
         conn.close()
         
-        logger.info(f"Devolución procesada: {cantidad_devolver} unidades de {item['producto_nombre']} en ticket {ticket['numero_ticket']}")
+        logger.info(f"Devolución procesada: {cantidad_devolver} unidades de {item['producto_nombre']} en ticket {ticket['numero_ticket']} - Estado: {estado_devolucion}")
+        
+        mensaje_estado = "retornan al almacén" if estado_devolucion == "buen_estado" else "se consideran desecho"
         
         return {
-            "mensaje": f"Devolución procesada: {cantidad_devolver} unidades de {item['producto_nombre']}",
+            "mensaje": f"Devolución procesada: {cantidad_devolver} unidades de {item['producto_nombre']} ({mensaje_estado})",
             "numero_ticket": ticket["numero_ticket"],
             "producto": item["producto_nombre"],
             "cantidad_devolver": cantidad_devolver,
-            "cantidad_restante": nueva_cantidad_entregada,
-            "estado_ticket": nuevo_estado
+            "cantidad_entregada": item["cantidad_entregada"],
+            "cantidad_devuelta": nueva_cantidad_devuelta,
+            "estado_ticket": nuevo_estado,
+            "estado_devolucion": estado_devolucion
         }
         
     except HTTPException:
