@@ -937,6 +937,29 @@ class AlmacenApp {
         document.getElementById('ticketForm').reset();
         document.getElementById('ticketItemsList').innerHTML = '';
         
+        // Remover instrucciones existentes antes de agregar nuevas
+        const existingInstructions = document.querySelector('.ticket-instructions');
+        if (existingInstructions) {
+            existingInstructions.remove();
+        }
+        
+        // Agregar instrucciones al formulario
+        const instructionsDiv = document.createElement('div');
+        instructionsDiv.className = 'ticket-instructions';
+        instructionsDiv.innerHTML = `
+            <div class="instructions-content">
+                <h4>📋 Instrucciones para crear ticket</h4>
+                <p>💡 <strong>Herramientas:</strong> Escanee los códigos QR de las herramientas que necesita</p>
+                <p>📊 <strong>Cantidad:</strong> Cada escaneo cuenta como 1 unidad (no se puede modificar manualmente)</p>
+                <p>🔄 <strong>Múltiples escaneos:</strong> Puede escanear la misma herramienta varias veces para aumentar la cantidad</p>
+                <p>✅ <strong>Confirmación:</strong> Complete los datos del ticket y envíe la solicitud</p>
+            </div>
+        `;
+        
+        // Insertar instrucciones al inicio de la lista de items
+        const itemsList = document.getElementById('ticketItemsList');
+        itemsList.parentNode.insertBefore(instructionsDiv, itemsList);
+        
         // Mostrar modal
         document.getElementById('ticketModal').style.display = 'flex';
         document.getElementById('ticketModalTitle').textContent = '🎫 Nuevo Ticket de Compra';
@@ -999,7 +1022,7 @@ class AlmacenApp {
         
         // NO restaurar scroll del body si hay otros modales abiertos
         if (!devolucionAbierto) {
-            document.body.classList.add('modal-open');
+        document.body.classList.add('modal-open');
         }
         
         console.log('✅ Modal de escáner QR mostrado');
@@ -1151,7 +1174,7 @@ class AlmacenApp {
         // Solo restaurar scroll del body si no hay otros modales abiertos
         const devolucionModal = document.getElementById('devolucionModal');
         if (!devolucionModal || devolucionModal.style.display !== 'flex') {
-            document.body.classList.remove('modal-open');
+        document.body.classList.remove('modal-open');
         }
         
         console.log('🆔 currentTicketId después de cerrar:', this.currentTicketId);
@@ -1367,7 +1390,53 @@ class AlmacenApp {
             }
             
             const result = await response.json();
-            this.showNotification(`Ticket ${result.numero_ticket} creado exitosamente`, 'success');
+            
+            console.log('🔍 Resultado de creación de ticket:', result);
+            
+            // Generar y descargar PDF automáticamente
+            try {
+                this.showNotification('Generando comprobante PDF...', 'info');
+                
+                console.log('🔍 Intentando generar PDF para ticket ID:', result.id);
+                
+                const pdfResponse = await fetch(`${this.apiUrl}/tickets/${result.id}/pdf`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (pdfResponse.ok) {
+                    console.log('✅ PDF generado exitosamente');
+                    
+                    // Obtener el blob del PDF
+                    const blob = await pdfResponse.blob();
+                    console.log('📄 Tamaño del PDF:', blob.size, 'bytes');
+                    
+                    // Crear URL para descarga
+                    const url = window.URL.createObjectURL(blob);
+                    
+                    // Crear elemento de descarga
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `ticket_${result.numero_ticket}.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    
+                    // Limpiar
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    this.showNotification(`✅ Ticket ${result.numero_ticket} creado exitosamente. 📄 PDF descargado automáticamente.`, 'success');
+                } else {
+                    console.error('❌ Error en respuesta PDF:', pdfResponse.status, pdfResponse.statusText);
+                    this.showNotification(`✅ Ticket ${result.numero_ticket} creado exitosamente`, 'success');
+                }
+            } catch (pdfError) {
+                console.error('Error generando PDF:', pdfError);
+                this.showNotification(`✅ Ticket ${result.numero_ticket} creado exitosamente (PDF no disponible)`, 'warning');
+            }
+            
             this.cerrarTicketModal();
             this.loadTickets();
             
@@ -1379,6 +1448,13 @@ class AlmacenApp {
     
     cerrarTicketModal() {
         document.getElementById('ticketModal').style.display = 'none';
+        
+        // Limpiar instrucciones al cerrar
+        const existingInstructions = document.querySelector('.ticket-instructions');
+        if (existingInstructions) {
+            existingInstructions.remove();
+        }
+        
         // Restaurar scroll del body
         document.body.classList.remove('modal-open');
     }
@@ -1398,19 +1474,51 @@ class AlmacenApp {
     }
     
     mostrarTicketDetalle(ticket) {
-        const fechaSolicitud = new Date(ticket.fecha_solicitud).toLocaleString('es-ES');
-        const fechaAprobacion = ticket.fecha_aprobacion ? new Date(ticket.fecha_aprobacion).toLocaleString('es-ES') : 'N/A';
-        const fechaEntrega = ticket.fecha_entrega ? new Date(ticket.fecha_entrega).toLocaleString('es-ES') : 'N/A';
+        // Función para formatear fechas correctamente
+        const formatearFecha = (fechaString) => {
+            if (!fechaString) return 'N/A';
+            
+            try {
+                // Si la fecha no tiene zona horaria, agregar 'Z' para UTC
+                const fecha = new Date(fechaString.includes('T') ? fechaString : fechaString + 'Z');
+                return fecha.toLocaleString('es-ES', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+            } catch (e) {
+                console.error('Error formateando fecha:', e);
+                return fechaString;
+            }
+        };
         
-        const itemsHtml = ticket.items.map(item => `
-            <div class="ticket-item">
-                <div class="ticket-item-name">${item.producto_nombre}</div>
-                <div class="ticket-item-qty">
-                    Solicitado: ${item.cantidad_solicitada} | 
-                    Entregado: ${item.cantidad_entregada || 0}
+        const fechaSolicitud = formatearFecha(ticket.fecha_solicitud);
+        const fechaAprobacion = formatearFecha(ticket.fecha_aprobacion);
+        const fechaEntrega = formatearFecha(ticket.fecha_entrega);
+        const fechaDevolucion = formatearFecha(ticket.fecha_devolucion);
+        
+        const itemsHtml = ticket.items.map(item => {
+            const cantidadDevuelta = item.cantidad_devuelta || 0;
+            return `
+                <div class="ticket-item">
+                    <div class="ticket-item-name">${item.producto_nombre}</div>
+                    <div class="ticket-item-qty">
+                        <span class="qty-section">
+                            <strong>Solicitado:</strong> ${item.cantidad_solicitada}
+                        </span>
+                        <span class="qty-section">
+                            <strong>Entregado:</strong> ${item.cantidad_entregada || 0}
+                        </span>
+                        <span class="qty-section ${cantidadDevuelta > 0 ? 'devuelto' : ''}">
+                            <strong>Devuelto:</strong> ${cantidadDevuelta}
+                        </span>
+                    </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
         
         const detalleInfo = document.getElementById('ticketDetalleInfo');
         detalleInfo.innerHTML = `
@@ -1424,6 +1532,7 @@ class AlmacenApp {
                 ${ticket.aprobador_nombre ? `<p><strong>Aprobado por:</strong> ${ticket.aprobador_nombre} (${fechaAprobacion})</p>` : ''}
                 ${ticket.comentarios_aprobador ? `<p><strong>Comentarios:</strong> ${ticket.comentarios_aprobador}</p>` : ''}
                 ${ticket.entregado_por_nombre ? `<p><strong>Entregado por:</strong> ${ticket.entregado_por_nombre} (${fechaEntrega})</p>` : ''}
+                ${ticket.devuelto_por_nombre ? `<p><strong>Devuelto por:</strong> ${ticket.devuelto_por_nombre} (${fechaDevolucion})</p>` : ''}
             </div>
             
             <div class="ticket-items">
@@ -1600,6 +1709,9 @@ class AlmacenApp {
         try {
             console.log('🔄 mostrarDevolucionModal llamado con ticketId:', ticketId);
             
+            // Inicializar lista de devoluciones
+            this.devolucionesPendientes = [];
+            
             // Obtener detalles del ticket
             const response = await fetch(`${this.apiUrl}/tickets/${ticketId}`);
             if (!response.ok) throw new Error('Error al obtener ticket');
@@ -1644,9 +1756,16 @@ class AlmacenApp {
                     ${herramientasHTML}
                 </div>
                 <div class="devolucion-instructions">
-                    <p>📱 Escanee el código QR de la herramienta que desea devolver</p>
-                    <p>💡 Cada escaneo devuelve 1 unidad de la herramienta</p>
+                    <p>📱 Escanee los códigos QR de las herramientas que desea devolver</p>
+                    <p>💡 Cada escaneo cuenta como 1 unidad</p>
                     <p>🔄 Puede escanear múltiples veces la misma herramienta</p>
+                    <p>✅ Confirme todas las devoluciones cuando termine</p>
+                </div>
+                <div class="devoluciones-section">
+                    <h4>📋 Lista de Devoluciones</h4>
+                    <div id="devolucionesList">
+                        <p class="no-devoluciones">📋 No hay herramientas en la lista de devoluciones</p>
+                    </div>
                 </div>
             `;
             
@@ -1670,87 +1789,58 @@ class AlmacenApp {
         // Restaurar scroll del body
         document.body.classList.remove('modal-open');
         
+        // Recargar tickets para mostrar cambios
+        this.loadTickets();
+        
         console.log('🆔 currentTicketId después de cerrar:', this.currentTicketId);
     }
     
     async procesarDevolucionQR(producto) {
         try {
+            console.log('🔄 procesarDevolucionQR llamado con:', producto);
+            console.log('🆔 currentTicketId:', this.currentTicketId);
+            
             if (!this.currentTicketId) {
+                console.error('❌ No hay ticket seleccionado');
                 this.showNotification('Error: No hay ticket seleccionado', 'error');
                 return;
             }
             
-            // Mostrar modal de confirmación de cantidad
-            this.mostrarConfirmacionDevolucion(producto);
+            // Agregar producto a la lista de devoluciones
+            this.agregarProductoADevolucion(producto);
             
         } catch (error) {
-            console.error('Error procesando devolución:', error);
+            console.error('❌ Error procesando devolución:', error);
             this.showNotification('Error al procesar devolución', 'error');
         }
     }
     
-    mostrarConfirmacionDevolucion(producto) {
-        console.log('📋 mostrarConfirmacionDevolucion llamado con:', producto);
-        
-        const modal = document.getElementById('confirmacionDevolucionModal');
-        const infoDiv = document.getElementById('confirmacionDevolucionInfo');
-        
-        console.log('🔍 Modal encontrado:', modal);
-        console.log('🔍 InfoDiv encontrado:', infoDiv);
-        
-        if (!modal || !infoDiv) {
-            console.error('❌ Modal o infoDiv no encontrado');
-            this.showNotification('Error: Modal de confirmación no encontrado', 'error');
-            return;
-        }
-        
-        infoDiv.innerHTML = `
-            <div class="producto-devolucion-info">
-                <h4>🔄 Confirmar Devolución</h4>
-                <p><strong>Herramienta:</strong> ${producto.nombre}</p>
-                <p><strong>Cantidad a devolver:</strong> <span class="cantidad-devolver">1 unidad</span></p>
-                <p class="devolucion-note">💡 Cada escaneo devuelve 1 unidad de la herramienta</p>
-            </div>
-        `;
-        
-        modal.style.display = 'flex';
-        document.body.classList.add('modal-open');
-        
-        // Guardar producto para usar en la confirmación
-        this.productoDevolucion = producto;
-        
-        console.log('✅ Modal de confirmación mostrado');
-    }
-    
-    cerrarConfirmacionDevolucion() {
-        document.getElementById('confirmacionDevolucionModal').style.display = 'none';
-        this.productoDevolucion = null;
-        document.body.classList.remove('modal-open');
-    }
-    
-    async confirmarDevolucion() {
+    async confirmarTodasDevoluciones() {
         try {
-            console.log('🔄 confirmarDevolucion llamado');
-            console.log('🆔 currentTicketId:', this.currentTicketId);
-            console.log('📦 productoDevolucion:', this.productoDevolucion);
+            console.log('🔄 confirmarTodasDevoluciones llamado');
             
-            if (!this.currentTicketId || !this.productoDevolucion) {
-                console.error('❌ Información incompleta para devolución');
-                this.showNotification('Error: Información incompleta', 'error');
+            if (!this.currentTicketId || !this.devolucionesPendientes || this.devolucionesPendientes.length === 0) {
+                this.showNotification('No hay devoluciones pendientes para confirmar', 'warning');
                 return;
             }
             
-            // Siempre usar cantidad 1 para trazabilidad
-            const cantidad = 1;
-            console.log('📊 Cantidad a devolver (fija):', cantidad);
+            console.log('📦 Devoluciones a procesar:', this.devolucionesPendientes);
             
+            // Procesar todas las devoluciones
+            let devolucionesExitosas = 0;
+            let devolucionesFallidas = 0;
+            let buenosEstados = 0;
+            let malosEstados = 0;
+            
+            for (const devolucion of this.devolucionesPendientes) {
+                try {
             const devolucionData = {
-                codigo: `ID:${this.productoDevolucion.id}|Nombre:${this.productoDevolucion.nombre}`,
-                cantidad: cantidad
+                        codigo: `ID:${devolucion.producto.id}|Nombre:${devolucion.producto.nombre}`,
+                        cantidad: devolucion.cantidad,
+                        estado: devolucion.estado // Incluir el estado en los datos
             };
-            
-            console.log('📤 Enviando devolución:', devolucionData);
-            console.log('🌐 URL:', `${this.apiUrl}/tickets/${this.currentTicketId}/devolver`);
+                    
+                    console.log('📤 Enviando devolución:', devolucionData);
             
             const response = await fetch(`${this.apiUrl}/tickets/${this.currentTicketId}/devolver`, {
                 method: 'POST',
@@ -1760,29 +1850,47 @@ class AlmacenApp {
                 body: JSON.stringify(devolucionData)
             });
             
-            console.log('📥 Status:', response.status);
-            console.log('📥 OK:', response.ok);
-            
-            if (!response.ok) {
+                    if (response.ok) {
+                        devolucionesExitosas += devolucion.cantidad;
+                        if (devolucion.estado === 'buen_estado') {
+                            buenosEstados += devolucion.cantidad;
+                        } else {
+                            malosEstados += devolucion.cantidad;
+                        }
+                        console.log(`✅ Devolución exitosa: ${devolucion.producto.nombre} x${devolucion.cantidad} (${devolucion.estado})`);
+                    } else {
                 const error = await response.json();
-                console.error('❌ Error del servidor:', error);
-                throw new Error(error.detail || 'Error al procesar devolución');
+                        console.error(`❌ Error devolviendo ${devolucion.producto.nombre}:`, error);
+                        devolucionesFallidas += devolucion.cantidad;
+                    }
+                    
+                } catch (error) {
+                    console.error(`❌ Error procesando devolución de ${devolucion.producto.nombre}:`, error);
+                    devolucionesFallidas += devolucion.cantidad;
+                }
             }
             
-            const result = await response.json();
-            console.log('✅ Resultado exitoso:', result);
-            this.showNotification(result.mensaje, 'success');
+            // Mostrar resultado detallado
+            let mensaje = `✅ ${devolucionesExitosas} unidades devueltas exitosamente`;
+            if (buenosEstados > 0) {
+                mensaje += `\n✅ ${buenosEstados} en buen estado (retornan al almacén)`;
+            }
+            if (malosEstados > 0) {
+                mensaje += `\n❌ ${malosEstados} en mal estado (desecho)`;
+            }
             
-            // Cerrar modales
-            this.cerrarConfirmacionDevolucion();
+            this.showNotification(mensaje, 'success');
+            
+            if (devolucionesFallidas > 0) {
+                this.showNotification(`⚠️ ${devolucionesFallidas} unidades no pudieron ser devueltas`, 'warning');
+            }
+            
+            // Cerrar modal y limpiar
             this.cerrarDevolucionModal();
             
-            // Recargar tickets
-            this.loadTickets();
-            
         } catch (error) {
-            console.error('❌ Error confirmando devolución:', error);
-            this.showNotification(error.message, 'error');
+            console.error('❌ Error confirmando devoluciones:', error);
+            this.showNotification('Error al procesar las devoluciones', 'error');
         }
     }
     
@@ -1828,6 +1936,8 @@ class AlmacenApp {
             this.loadProductos();
         } else if (seccionId === 'tickets-section') {
             this.loadTickets();
+        } else if (seccionId === 'historial-section') {
+            this.cargarHistorial();
         }
     }
     
@@ -1859,6 +1969,192 @@ class AlmacenApp {
             modalContent.offsetHeight;
         }
     }
+
+    agregarProductoADevolucion(producto) {
+        console.log('🔄 agregarProductoADevolucion llamado con:', producto);
+        
+        // Inicializar lista de devoluciones si no existe
+        if (!this.devolucionesPendientes) {
+            this.devolucionesPendientes = [];
+        }
+        
+        // Verificar si el producto ya existe en la lista de devoluciones
+        const existingDevolucion = this.devolucionesPendientes.find(d => d.producto.id === producto.id);
+        
+        if (existingDevolucion) {
+            // Si el producto ya existe, incrementar la cantidad
+            existingDevolucion.cantidad += 1;
+            console.log(`✅ ${producto.nombre} - Cantidad incrementada a ${existingDevolucion.cantidad}`);
+            this.showNotification(`✅ ${producto.nombre} - Cantidad incrementada a ${existingDevolucion.cantidad}`, 'success');
+        } else {
+            // Si el producto no existe, agregarlo a la lista con estado por defecto
+            this.devolucionesPendientes.push({
+                producto: producto,
+                cantidad: 1,
+                estado: 'buen_estado' // Estado por defecto
+            });
+            console.log(`✅ ${producto.nombre} agregado a la lista de devoluciones`);
+            this.showNotification(`✅ ${producto.nombre} agregado a la lista de devoluciones`, 'success');
+        }
+        
+        // Actualizar la lista visual en el modal
+        this.actualizarListaDevoluciones();
+    }
+
+    actualizarListaDevoluciones() {
+        console.log('🔄 actualizarListaDevoluciones llamado');
+        
+        const devolucionesList = document.getElementById('devolucionesList');
+        if (!devolucionesList) {
+            console.error('❌ Elemento devolucionesList no encontrado');
+            return;
+        }
+        
+        if (!this.devolucionesPendientes || this.devolucionesPendientes.length === 0) {
+            devolucionesList.innerHTML = '<p class="no-devoluciones">📋 No hay herramientas en la lista de devoluciones</p>';
+            return;
+        }
+        
+        const devolucionesHTML = this.devolucionesPendientes.map((devolucion, index) => `
+            <div class="devolucion-item" data-index="${index}">
+                <div class="devolucion-info">
+                    <span class="devolucion-nombre">${devolucion.producto.nombre}</span>
+                    <span class="devolucion-cantidad">Cantidad: ${devolucion.cantidad}</span>
+                </div>
+                <div class="devolucion-estado">
+                    <label>Estado:</label>
+                    <select class="estado-selector" onchange="app.cambiarEstadoDevolucion(${index}, this.value)">
+                        <option value="buen_estado" ${devolucion.estado === 'buen_estado' ? 'selected' : ''}>✅ Buen Estado</option>
+                        <option value="mal_estado" ${devolucion.estado === 'mal_estado' ? 'selected' : ''}>❌ Mal Estado</option>
+                    </select>
+                </div>
+                <button type="button" class="btn-remove-devolucion" onclick="app.removerDevolucion(${index})">❌</button>
+            </div>
+        `).join('');
+        
+        devolucionesList.innerHTML = devolucionesHTML;
+        
+        console.log('✅ Lista de devoluciones actualizada');
+    }
+
+    removerDevolucion(index) {
+        console.log('🔄 removerDevolucion llamado con índice:', index);
+        
+        if (this.devolucionesPendientes && this.devolucionesPendientes[index]) {
+            const producto = this.devolucionesPendientes[index].producto;
+            this.devolucionesPendientes.splice(index, 1);
+            
+            console.log(`✅ ${producto.nombre} removido de la lista de devoluciones`);
+            this.showNotification(`${producto.nombre} removido de la lista`, 'info');
+            
+            // Actualizar la lista visual
+            this.actualizarListaDevoluciones();
+        }
+    }
+
+    cambiarEstadoDevolucion(index, nuevoEstado) {
+        console.log('🔄 cambiarEstadoDevolucion llamado:', { index, nuevoEstado });
+        
+        if (this.devolucionesPendientes && this.devolucionesPendientes[index]) {
+            const devolucion = this.devolucionesPendientes[index];
+            const estadoAnterior = devolucion.estado;
+            devolucion.estado = nuevoEstado;
+            
+            console.log(`✅ Estado de ${devolucion.producto.nombre} cambiado de ${estadoAnterior} a ${nuevoEstado}`);
+            
+            // Mostrar notificación según el estado
+            const mensaje = nuevoEstado === 'buen_estado' 
+                ? `✅ ${devolucion.producto.nombre} marcado como Buen Estado` 
+                : `❌ ${devolucion.producto.nombre} marcado como Mal Estado (desecho)`;
+            
+            this.showNotification(mensaje, nuevoEstado === 'buen_estado' ? 'success' : 'warning');
+        }
+    }
+
+    async cargarHistorial() {
+        try {
+            console.log('🔄 cargarHistorial llamado');
+            
+            const response = await fetch(`${this.apiUrl}/historial`);
+            if (!response.ok) {
+                throw new Error('Error al cargar historial');
+            }
+            
+            const data = await response.json();
+            this.historial = data.historial || [];
+            
+            console.log('📊 Historial cargado:', this.historial.length, 'registros');
+            this.renderHistorial(this.historial);
+            
+        } catch (error) {
+            console.error('❌ Error cargando historial:', error);
+            this.showNotification('Error al cargar historial', 'error');
+        }
+    }
+
+    filtrarHistorial() {
+        const filtro = document.getElementById('historialAccionFilter').value;
+        
+        if (!this.historial) {
+            this.cargarHistorial();
+            return;
+        }
+        
+        let historialFiltrado = this.historial;
+        
+        if (filtro) {
+            historialFiltrado = this.historial.filter(item => item.accion === filtro);
+        }
+        
+        this.renderHistorial(historialFiltrado);
+    }
+
+    renderHistorial(historial) {
+        const container = document.getElementById('historialList');
+        
+        if (!historial || historial.length === 0) {
+            container.innerHTML = '<p class="no-historial">📋 No hay registros en el historial</p>';
+            return;
+        }
+        
+        const historialHTML = historial.map(item => {
+            const fecha = new Date(item.fecha).toLocaleString('es-ES');
+            const accionDisplay = this.getAccionDisplay(item.accion);
+            
+            return `
+                <div class="historial-item ${item.accion}">
+                    <div class="historial-header">
+                        <span class="historial-accion">${accionDisplay}</span>
+                        <span class="historial-fecha">${fecha}</span>
+                    </div>
+                    <div class="historial-details">
+                        ${item.producto_nombre ? `<span class="historial-producto">${item.producto_nombre}</span>` : ''}
+                        ${item.cantidad_anterior !== null ? `<span class="historial-cantidad">Cantidad: ${item.cantidad_anterior} → ${item.cantidad_nueva}</span>` : ''}
+                        <span class="historial-usuario">${item.usuario_nombre}</span>
+                    </div>
+                    ${item.detalles ? `<div class="historial-detalles">${item.detalles}</div>` : ''}
+                </div>
+            `;
+        }).join('');
+        
+        container.innerHTML = historialHTML;
+    }
+
+    getAccionDisplay(accion) {
+        const acciones = {
+            'crear': '➕ Crear Producto',
+            'actualizar': '✏️ Actualizar Producto',
+            'eliminar': '🗑️ Eliminar Producto',
+            'devolucion_buen_estado': '✅ Devolución (Buen Estado)',
+            'devolucion_mal_estado': '❌ Devolución (Mal Estado)',
+            'devolucion': '🔄 Devolución',
+            'entrega': '📦 Entrega de Ticket'
+        };
+        
+        return acciones[accion] || accion;
+    }
+
+
 }
 
 // Inicializar aplicación
