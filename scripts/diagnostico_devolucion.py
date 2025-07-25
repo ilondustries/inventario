@@ -1,245 +1,79 @@
 #!/usr/bin/env python3
 """
-Script de diagnóstico para verificar el estado de las devoluciones
+Diagnóstico del problema de devolución de tickets
 """
 
 import sqlite3
-import os
-import sys
+import requests
+import json
 
-def get_db_connection():
-    """Obtener conexión a la base de datos"""
-    try:
-        db_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'almacen.db')
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
-    except Exception as e:
-        print(f"❌ Error conectando a la base de datos: {e}")
-        return None
-
-def verificar_tickets_entregados():
-    """Verificar tickets entregados que pueden ser devueltos"""
-    conn = get_db_connection()
-    if not conn:
-        return
+def diagnosticar_devolucion():
+    """Diagnosticar el problema de devolución"""
     
+    print("🔍 Diagnóstico del problema de devolución")
+    print("=" * 50)
+    
+    # 1. Verificar base de datos de desarrollo
+    print("\n1. 📊 Verificando base de datos de desarrollo...")
     try:
+        conn = sqlite3.connect('data/almacen_desarrollo.db')
         cursor = conn.cursor()
         
-        print("🔍 Verificando tickets entregados...")
-        print("=" * 60)
-        
-        # Obtener tickets entregados
-        cursor.execute("""
-            SELECT 
-                tc.id,
-                tc.numero_ticket,
-                tc.estado,
-                tc.solicitante_nombre,
-                tc.fecha_creacion,
-                COUNT(ti.id) as total_items,
-                SUM(ti.cantidad_solicitada) as total_solicitado,
-                SUM(ti.cantidad_entregada) as total_entregado
-            FROM tickets_compra tc
-            LEFT JOIN ticket_items ti ON tc.id = ti.ticket_id
-            WHERE tc.estado = 'entregado'
-            GROUP BY tc.id
-            ORDER BY tc.fecha_creacion DESC
-        """)
-        
+        # Verificar tickets
+        cursor.execute("SELECT id, numero_ticket, estado FROM tickets_compra ORDER BY id DESC LIMIT 5")
         tickets = cursor.fetchall()
-        
-        if not tickets:
-            print("❌ No hay tickets entregados para devolver")
-            return
-        
-        print(f"✅ Encontrados {len(tickets)} tickets entregados:")
-        print()
-        
+        print(f"   Tickets encontrados: {len(tickets)}")
         for ticket in tickets:
-            print(f"🎫 Ticket: {ticket['numero_ticket']}")
-            print(f"   📊 Estado: {ticket['estado']}")
-            print(f"   👤 Solicitante: {ticket['solicitante_nombre']}")
-            print(f"   📅 Fecha: {ticket['fecha_creacion']}")
-            print(f"   📦 Items: {ticket['total_items']}")
-            print(f"   🔢 Total solicitado: {ticket['total_solicitado']}")
-            print(f"   📤 Total entregado: {ticket['total_entregado']}")
-            print()
-            
-            # Mostrar detalles de los items
+            print(f"   - ID: {ticket[0]}, Ticket: {ticket[1]}, Estado: {ticket[2]}")
+        
+        # Verificar items de tickets
+        if tickets:
+            ticket_id = tickets[0][0]  # Último ticket
             cursor.execute("""
-                SELECT 
-                    ti.id,
-                    ti.producto_id,
-                    ti.producto_nombre,
-                    ti.cantidad_solicitada,
-                    ti.cantidad_entregada,
-                    p.cantidad as stock_actual
+                SELECT ti.id, ti.producto_id, ti.producto_nombre, 
+                       ti.cantidad_solicitada, ti.cantidad_entregada
                 FROM ticket_items ti
-                JOIN productos p ON ti.producto_id = p.id
                 WHERE ti.ticket_id = ?
-            """, (ticket['id'],))
-            
+            """, (ticket_id,))
             items = cursor.fetchall()
-            
+            print(f"   Items del ticket {ticket_id}: {len(items)}")
             for item in items:
-                print(f"      🛠️  {item['producto_nombre']}")
-                print(f"         📋 Solicitado: {item['cantidad_solicitada']}")
-                print(f"         📤 Entregado: {item['cantidad_entregada']}")
-                print(f"         📦 Stock actual: {item['stock_actual']}")
-                print()
-            
-            print("-" * 40)
+                if len(item) >= 5:  # Verificar que tenga suficientes elementos
+                    print(f"   - Producto: {item[2]}, Solicitado: {item[3]}, Entregado: {item[4]}")
+                else:
+                    print(f"   - Item con estructura inesperada: {item}")
+        
+        # Verificar productos
+        cursor.execute("SELECT id, nombre, cantidad FROM productos LIMIT 5")
+        productos = cursor.fetchall()
+        print(f"   Productos disponibles: {len(productos)}")
+        for producto in productos:
+            print(f"   - ID: {producto[0]}, {producto[1]}, Stock: {producto[2]}")
+        
+        conn.close()
         
     except Exception as e:
-        print(f"❌ Error verificando tickets: {e}")
-    finally:
-        conn.close()
-
-def simular_devolucion(ticket_id, producto_id, cantidad=1):
-    """Simular una devolución para verificar el proceso"""
-    conn = get_db_connection()
-    if not conn:
-        return
+        print(f"   ❌ Error verificando BD: {e}")
     
+    # 2. Verificar servidor de desarrollo (puerto 8000)
+    print("\n2. 🌐 Verificando servidor de desarrollo (puerto 8000)...")
     try:
-        cursor = conn.cursor()
-        
-        print(f"🔄 Simulando devolución...")
-        print(f"   🎫 Ticket ID: {ticket_id}")
-        print(f"   🛠️  Producto ID: {producto_id}")
-        print(f"   📦 Cantidad: {cantidad}")
-        print()
-        
-        # Obtener información del ticket
-        cursor.execute("""
-            SELECT id, numero_ticket, estado, solicitante_nombre
-            FROM tickets_compra 
-            WHERE id = ?
-        """, (ticket_id,))
-        
-        ticket = cursor.fetchone()
-        if not ticket:
-            print("❌ Ticket no encontrado")
-            return
-        
-        print(f"✅ Ticket encontrado: {ticket['numero_ticket']}")
-        print(f"   📊 Estado: {ticket['estado']}")
-        print(f"   👤 Solicitante: {ticket['solicitante_nombre']}")
-        print()
-        
-        # Obtener información del item
-        cursor.execute("""
-            SELECT ti.id, ti.producto_id, ti.producto_nombre, ti.cantidad_solicitada, 
-                   ti.cantidad_entregada, p.cantidad as stock_actual
-            FROM ticket_items ti
-            JOIN productos p ON ti.producto_id = p.id
-            WHERE ti.ticket_id = ? AND ti.producto_id = ?
-        """, (ticket_id, producto_id))
-        
-        item = cursor.fetchone()
-        if not item:
-            print("❌ Producto no encontrado en el ticket")
-            return
-        
-        print(f"✅ Producto encontrado: {item['producto_nombre']}")
-        print(f"   📋 Cantidad solicitada: {item['cantidad_solicitada']}")
-        print(f"   📤 Cantidad entregada: {item['cantidad_entregada']}")
-        print(f"   📦 Stock actual: {item['stock_actual']}")
-        print()
-        
-        # Verificar que haya productos para devolver
-        if item['cantidad_entregada'] <= 0:
-            print("❌ No hay productos entregados para devolver")
-            return
-        
-        if cantidad > item['cantidad_entregada']:
-            print(f"❌ Solo se pueden devolver hasta {item['cantidad_entregada']} unidades")
-            return
-        
-        # Simular la devolución
-        nueva_cantidad_entregada = item['cantidad_entregada'] - cantidad
-        nuevo_stock = item['stock_actual'] + cantidad
-        
-        print(f"🔄 Procesando devolución...")
-        print(f"   📤 Nueva cantidad entregada: {nueva_cantidad_entregada}")
-        print(f"   📦 Nuevo stock: {nuevo_stock}")
-        print()
-        
-        # Actualizar cantidad entregada
-        cursor.execute("""
-            UPDATE ticket_items 
-            SET cantidad_entregada = ?
-            WHERE id = ?
-        """, (nueva_cantidad_entregada, item['id']))
-        
-        # Actualizar stock
-        cursor.execute("""
-            UPDATE productos 
-            SET cantidad = ?, fecha_actualizacion = CURRENT_TIMESTAMP
-            WHERE id = ?
-        """, (nuevo_stock, producto_id))
-        
-        # Verificar si todos los items fueron devueltos
-        cursor.execute("""
-            SELECT 
-                SUM(cantidad_solicitada) as total_solicitado,
-                SUM(cantidad_entregada) as total_entregado
-            FROM ticket_items 
-            WHERE ticket_id = ?
-        """, (ticket_id,))
-        
-        totales = dict(cursor.fetchone())
-        
-        nuevo_estado = "devuelto" if totales["total_entregado"] == 0 else "entregado"
-        
-        if nuevo_estado == "devuelto":
-            cursor.execute("""
-                UPDATE tickets_compra 
-                SET estado = ?
-                WHERE id = ?
-            """, (nuevo_estado, ticket_id))
-        
-        conn.commit()
-        
-        print(f"✅ Devolución procesada exitosamente")
-        print(f"   📊 Nuevo estado del ticket: {nuevo_estado}")
-        print(f"   📤 Cantidad restante: {nueva_cantidad_entregada}")
-        print(f"   📦 Stock actualizado: {nuevo_stock}")
-        
+        response = requests.get("http://localhost:8000/api/productos", timeout=5)
+        if response.status_code == 200:
+            print("   ✅ Servidor de desarrollo respondiendo")
+        else:
+            print(f"   ⚠️ Servidor responde con status: {response.status_code}")
+    except requests.exceptions.ConnectionError:
+        print("   ❌ Servidor de desarrollo NO está corriendo en puerto 8000")
+        print("   💡 Ejecuta: python backend/main.py")
     except Exception as e:
-        print(f"❌ Error simulando devolución: {e}")
-        conn.rollback()
-    finally:
-        conn.close()
-
-def main():
-    print("🔧 DIAGNÓSTICO DE DEVOLUCIONES")
-    print("=" * 60)
+        print(f"   ❌ Error conectando al servidor: {e}")
     
-    # Verificar tickets entregados
-    verificar_tickets_entregados()
-    
-    print()
-    print("🔄 Para simular una devolución, ejecuta:")
-    print("   python scripts/diagnostico_devolucion.py <ticket_id> <producto_id> [cantidad]")
-    print()
-    
-    # Si se proporcionan argumentos, simular devolución
-    if len(sys.argv) >= 3:
-        try:
-            ticket_id = int(sys.argv[1])
-            producto_id = int(sys.argv[2])
-            cantidad = int(sys.argv[3]) if len(sys.argv) > 3 else 1
-            
-            print("🔄 Simulando devolución...")
-            simular_devolucion(ticket_id, producto_id, cantidad)
-            
-        except ValueError:
-            print("❌ Error: Los IDs deben ser números enteros")
-        except Exception as e:
-            print(f"❌ Error: {e}")
+    print("\n3. 📋 Resumen del diagnóstico:")
+    print("   - Verificar que el servidor de desarrollo esté corriendo en puerto 8000")
+    print("   - Verificar que haya tickets entregados")
+    print("   - Verificar que los productos tengan códigos QR válidos")
+    print("   - Revisar logs del servidor para errores específicos")
 
 if __name__ == "__main__":
-    main() 
+    diagnosticar_devolucion() 

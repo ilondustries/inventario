@@ -592,6 +592,11 @@ button[type="submit"]:hover {
     -webkit-overflow-scrolling: touch;
 }
 
+/* Modal del escáner QR con z-index más alto */
+#qrScannerModal {
+    z-index: 1002;
+}
+
 /* Prevenir scroll del body cuando modal está abierto */
 body.modal-open {
     overflow: hidden;
@@ -657,9 +662,10 @@ body.modal-open {
     border-radius: 8px;
     color: white;
     font-weight: bold;
-    z-index: 1001;
+    z-index: 1003;
     transform: translateX(400px);
     transition: transform 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 
 .notification.show {
@@ -939,6 +945,12 @@ body.modal-open {
     color: #333;
 }
 
+/* Estilo para destacar la fecha de devolución */
+.ticket-info p:has(strong:contains("Fecha de Devolución")) {
+    color: #28a745;
+    font-weight: 600;
+}
+
 .ticket-items {
     margin-bottom: 15px;
 }
@@ -967,6 +979,23 @@ body.modal-open {
 .ticket-item-qty {
     color: #666;
     font-size: 0.9rem;
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.qty-section {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+}
+
+.qty-section.devuelto {
+    background: #d4edda;
+    border-color: #c3e6cb;
+    color: #155724;
 }
 
 .ticket-actions {
@@ -1060,17 +1089,41 @@ body.modal-open {
 
 .ticket-item-form .input-group {
     margin-bottom: 0;
+    flex: 1;
 }
 
 .ticket-item-form label {
-    font-size: 0.9rem;
+    font-weight: bold;
+    color: #333;
     margin-bottom: 5px;
 }
 
 .ticket-item-form input,
-.ticket-item-form select {
+.ticket-item-form span {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.cantidad-escaneos {
+    display: inline-block;
     padding: 8px 12px;
-    font-size: 0.9rem;
+    background: #e8f5e8;
+    border: 2px solid #28a745;
+    border-radius: 4px;
+    font-weight: bold;
+    color: #28a745;
+    font-size: 1.1em;
+    text-align: center;
+    min-width: 60px;
+    transition: all 0.3s ease;
+}
+
+.cantidad-escaneos:hover {
+    background: #d4edda;
+    transform: scale(1.05);
 }
 
 .btn-remove-item {
@@ -1669,87 +1722,442 @@ body.modal-open {
     padding: 15px;
     border-radius: 8px;
     margin: 15px 0;
-    border-left: 4px solid #667eea;
 }
 
 .devolucion-instructions p {
     margin: 5px 0;
     color: #666;
-    font-size: 0.9rem;
 }
 
 .devolucion-scanner-section {
-    text-align: center;
-    padding: 20px;
-    background: #f8f9fa;
+    background: #e3f2fd;
+    padding: 15px;
     border-radius: 8px;
     margin: 15px 0;
+    text-align: center;
 }
 
 .devolucion-scanner-section h4 {
-    margin-bottom: 15px;
-    color: #333;
+    margin-bottom: 10px;
+    color: #1976d2;
 }
 
 .producto-devolucion-info {
-    text-align: center;
-    padding: 20px;
+    text-align: left;
 }
 
 .producto-devolucion-info h4 {
-    margin-bottom: 15px;
     color: #333;
+    margin-bottom: 15px;
+}
+
+.cantidad-devolver {
+    font-weight: bold;
+    color: #28a745;
+    font-size: 1.1em;
 }
 
 .cantidad-devolver-input {
-    width: 100px;
-    padding: 8px;
+    width: 100%;
+    padding: 10px;
     border: 2px solid #ddd;
     border-radius: 5px;
-    font-size: 1rem;
-    text-align: center;
+    font-size: 16px;
     margin: 10px 0;
 }
 
 .cantidad-devolver-input:focus {
     border-color: #667eea;
     outline: none;
+    box-shadow: 0 0 5px rgba(102, 126, 234, 0.3);
 }
 
 .devolucion-note {
-    font-size: 0.8rem;
+    font-style: italic;
     color: #666;
     margin-top: 10px;
 }
 
-/* Estado devuelto para tickets */
+/* Estilos para herramientas entregadas */
+.herramientas-entregadas {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 15px 0;
+}
+
+.herramientas-entregadas h4 {
+    color: #333;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.herramienta-entregada {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background: white;
+    border-radius: 5px;
+    margin: 5px 0;
+    border-left: 4px solid #28a745;
+    transition: all 0.3s ease;
+}
+
+.herramienta-entregada.completamente-devuelto {
+    border-left-color: #6c757d;
+    background: #f8f9fa;
+    opacity: 0.7;
+}
+
+.herramienta-entregada.parcialmente-devuelto {
+    border-left-color: #ffc107;
+    background: #fffbf0;
+}
+
+.herramienta-nombre {
+    font-weight: bold;
+    color: #333;
+}
+
+.herramienta-cantidad {
+    font-size: 0.9em;
+    color: #666;
+}
+
+/* Estados de tickets */
 .ticket-card.devuelto {
-    border-left-color: #28a745;
-    background: linear-gradient(135deg, #f8fff9 0%, #e8f5e8 100%);
+    border-left: 4px solid #6c757d;
 }
 
 .ticket-estado.devuelto {
-    background: #28a745;
+    background: #6c757d;
     color: white;
 }
 
-/* Responsive para modales de devolución */
-@media (max-width: 768px) {
-    .devolucion-modal-content {
-        max-width: 95vw;
-        max-height: 90vh;
+/* Estilos para instrucciones del ticket */
+.ticket-instructions {
+    background: #e3f2fd;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 15px 0;
+    border-left: 4px solid #1976d2;
+}
+
+.instructions-content h4 {
+    color: #1976d2;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+}
+
+.instructions-content p {
+    margin: 5px 0;
+    color: #333;
+    font-size: 0.9em;
+    line-height: 1.4;
     }
     
-    .devolucion-scanner-section {
+.instructions-content strong {
+    color: #1976d2;
+} 
+
+/* Estilos para la sección de devoluciones */
+.devoluciones-section {
+    background: #f8f9fa;
         padding: 15px;
+    border-radius: 8px;
+    margin: 15px 0;
     }
     
-    .producto-devolucion-info {
+.devoluciones-section h4 {
+    color: #333;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.no-devoluciones {
+    text-align: center;
+    color: #666;
+    font-style: italic;
+    padding: 20px;
+}
+
+.devolucion-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background: white;
+    border-radius: 5px;
+    margin: 5px 0;
+    border-left: 4px solid #28a745;
+    transition: all 0.3s ease;
+    gap: 10px;
+}
+
+.devolucion-info {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex: 1;
+}
+
+.devolucion-nombre {
+    font-weight: bold;
+    color: #333;
+}
+
+.devolucion-cantidad {
+    font-size: 0.9em;
+    color: #28a745;
+    font-weight: bold;
+}
+
+.btn-remove-devolucion {
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 5px 10px;
+    cursor: pointer;
+    font-size: 0.8em;
+    transition: background-color 0.3s ease;
+}
+
+.btn-remove-devolucion:hover {
+    background: #c82333;
+} 
+
+.devolucion-estado {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 120px;
+}
+
+.devolucion-estado label {
+    font-size: 0.8em;
+    color: #666;
+    font-weight: bold;
+}
+
+.estado-selector {
+    padding: 5px 8px;
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.9em;
+    background: white;
+    cursor: pointer;
+    transition: border-color 0.3s ease;
+}
+
+.estado-selector:focus {
+    outline: none;
+    border-color: #28a745;
+}
+
+.estado-selector option[value="buen_estado"] {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.estado-selector option[value="mal_estado"] {
+    color: #dc3545;
+    font-weight: bold;
+} 
+
+/* Estilos para estados de herramientas en detalles del ticket */
+ 
+
+/* Estilos para la sección de historial */
+.historial-filters {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.historial-filters select {
+    padding: 8px 12px;
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.9em;
+    background: white;
+    cursor: pointer;
+}
+
+.historial-filters select:focus {
+    outline: none;
+    border-color: #28a745;
+}
+
+.historial-list {
+    max-height: 600px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: white;
+}
+
+.historial-item {
         padding: 15px;
+    border-bottom: 1px solid #eee;
+    transition: background-color 0.3s ease;
     }
     
-    .cantidad-devolver-input {
-        width: 80px;
-        font-size: 0.9rem;
+.historial-item:hover {
+    background: #f8f9fa;
+}
+
+.historial-item:last-child {
+    border-bottom: none;
+}
+
+.historial-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.historial-accion {
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+.historial-fecha {
+    color: #666;
+    font-size: 0.9em;
+}
+
+.historial-details {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    margin-bottom: 5px;
+}
+
+.historial-producto {
+    font-weight: bold;
+    color: #333;
+}
+
+.historial-cantidad {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.historial-usuario {
+    color: #007bff;
+    font-weight: bold;
+}
+
+.historial-detalles {
+    color: #666;
+    font-style: italic;
+    font-size: 0.9em;
+    margin-top: 5px;
+    padding: 5px;
+    background: #f8f9fa;
+    border-radius: 3px;
+}
+
+/* Estilos específicos para diferentes tipos de acciones */
+.historial-item.crear {
+    border-left: 4px solid #28a745;
+}
+
+.historial-item.actualizar {
+    border-left: 4px solid #ffc107;
+}
+
+.historial-item.eliminar {
+    border-left: 4px solid #dc3545;
+}
+
+.historial-item.devolucion_buen_estado {
+    border-left: 4px solid #28a745;
+}
+
+.historial-item.devolucion_mal_estado {
+    border-left: 4px solid #dc3545;
+}
+
+.historial-item.entrega {
+    border-left: 4px solid #007bff;
+}
+
+.no-historial {
+    text-align: center;
+    color: #666;
+    font-style: italic;
+    padding: 40px;
+} 
+
+/* Estilos para notificaciones de PDF */
+.notification.pdf-success {
+    background: linear-gradient(135deg, #28a745, #20c997);
+    border-left: 4px solid #218838;
+}
+
+.notification.pdf-info {
+    background: linear-gradient(135deg, #17a2b8, #20c997);
+    border-left: 4px solid #138496;
+}
+
+/* Animación de carga para PDF */
+.pdf-loading {
+    position: relative;
+    overflow: hidden;
+}
+
+.pdf-loading::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    animation: loading-shimmer 1.5s infinite;
+}
+
+@keyframes loading-shimmer {
+    0% { left: -100%; }
+    100% { left: 100%; }
+}
+
+/* Estilos para botón de envío de ticket */
+.btn-enviar-ticket {
+    background: linear-gradient(135deg, #007bff, #0056b3);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     }
+
+.btn-enviar-ticket:hover {
+    background: linear-gradient(135deg, #0056b3, #004085);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.4);
+}
+
+.btn-enviar-ticket:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(0, 123, 255, 0.3);
+}
+
+.btn-enviar-ticket:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
 } 

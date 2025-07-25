@@ -6,3 +6,4 @@ requests==2.31.0
 qrcode[pil]
 Pillow
 python-barcode 
+reportlab==4.4.2 
