@@ -336,17 +336,6 @@ def init_database():
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_usuarios_username ON usuarios(username)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_sesiones_token ON sesiones(token)')
         
-        # Crear usuario administrador por defecto si no existe
-        cursor.execute("SELECT COUNT(*) FROM usuarios WHERE username = 'admin'")
-        if cursor.fetchone()[0] == 0:
-            import hashlib
-            password_hash = hashlib.sha256('admin123'.encode()).hexdigest()
-            cursor.execute("""
-                INSERT INTO usuarios (username, password_hash, nombre_completo, email, rol)
-                VALUES (?, ?, ?, ?, ?)
-            """, ('admin', password_hash, 'Administrador del Sistema', 'admin@empresa.com', 'admin'))
-            logger.info("Usuario administrador creado: admin / admin123")
-        
         # Crear tabla de tickets de compra
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS tickets_compra (
@@ -402,6 +391,24 @@ def init_database():
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_tickets_fecha ON tickets_compra(fecha_solicitud)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_ticket_items_ticket ON ticket_items(ticket_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_ticket_items_producto ON ticket_items(producto_id)')
+        
+        # Crear índices para tickets (después de crear las tablas)
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_tickets_solicitante ON tickets_compra(solicitante_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_tickets_estado ON tickets_compra(estado)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_tickets_fecha ON tickets_compra(fecha_solicitud)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_ticket_items_ticket ON ticket_items(ticket_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_ticket_items_producto ON ticket_items(producto_id)')
+        
+        # Crear usuario administrador por defecto si no existe
+        cursor.execute("SELECT COUNT(*) FROM usuarios WHERE username = 'admin'")
+        if cursor.fetchone()[0] == 0:
+            import hashlib
+            password_hash = hashlib.sha256('admin123'.encode()).hexdigest()
+            cursor.execute("""
+                INSERT INTO usuarios (username, password_hash, nombre_completo, email, rol)
+                VALUES (?, ?, ?, ?, ?)
+            """, ('admin', password_hash, 'Administrador del Sistema', 'admin@empresa.com', 'admin'))
+            logger.info("Usuario administrador creado: admin / admin123")
         
         conn.commit()
         conn.close()
@@ -1550,7 +1557,14 @@ async def entregar_ticket(ticket_id: int, entrega: dict, request: Request):
                 SELECT cantidad FROM productos WHERE id = ?
             """, (item_ticket["producto_id"],))
             
-            stock_actual = cursor.fetchone()["cantidad"]
+            stock_result = cursor.fetchone()
+            if not stock_result:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Producto {item_ticket['producto_nombre']} no encontrado en inventario"
+                )
+            
+            stock_actual = stock_result["cantidad"]
             if stock_actual < cantidad_entregada:
                 raise HTTPException(
                     status_code=400,
@@ -1938,17 +1952,24 @@ async def descargar_pdf_ticket(ticket_id: int, request: Request):
 async def devolver_ticket(ticket_id: int, devolucion: dict, request: Request):
     """Procesar devolución de herramientas mediante escaneo QR"""
     try:
+        logger.info(f"🔄 Iniciando devolución para ticket {ticket_id}")
+        logger.info(f"📦 Datos de devolución: {devolucion}")
+        
         current_user = get_current_user(request)
         require_auth(current_user)
+        
+        logger.info(f"👤 Usuario autenticado: {current_user['username']} ({current_user['rol']})")
         
         # Verificar que el usuario sea supervisor u operador
         if current_user["rol"] not in ["supervisor", "operador"]:
             raise HTTPException(status_code=403, detail="Solo supervisores y operadores pueden devolver herramientas")
         
+        logger.info("🔗 Conectando a base de datos...")
         conn = get_db_connection()
         cursor = conn.cursor()
         
         # Obtener ticket
+        logger.info(f"📋 Obteniendo ticket {ticket_id}...")
         cursor.execute("""
             SELECT id, numero_ticket, estado, solicitante_id, solicitante_nombre
             FROM tickets_compra 
@@ -1960,6 +1981,7 @@ async def devolver_ticket(ticket_id: int, devolucion: dict, request: Request):
             raise HTTPException(status_code=404, detail="Ticket no encontrado")
         
         ticket = dict(ticket)
+        logger.info(f"✅ Ticket encontrado: {ticket['numero_ticket']} (estado: {ticket['estado']})")
         
         # Verificar que el ticket esté entregado
         if ticket["estado"] != "entregado":
@@ -1974,12 +1996,15 @@ async def devolver_ticket(ticket_id: int, devolucion: dict, request: Request):
         if not codigo_escaneado:
             raise HTTPException(status_code=400, detail="Código de producto requerido")
         
+        logger.info(f"🔍 Procesando código escaneado: {codigo_escaneado}")
+        
         # Buscar el producto
         producto_id = None
         if "ID:" in codigo_escaneado:
             try:
                 id_part = codigo_escaneado.split("|")[0]
                 producto_id = int(id_part.replace("ID:", ""))
+                logger.info(f"🎯 Producto ID extraído: {producto_id}")
             except (ValueError, IndexError):
                 raise HTTPException(status_code=400, detail="Código QR inválido")
         
@@ -1987,6 +2012,7 @@ async def devolver_ticket(ticket_id: int, devolucion: dict, request: Request):
             raise HTTPException(status_code=400, detail="No se pudo identificar el producto")
         
         # Verificar que el producto esté en el ticket
+        logger.info(f"🔍 Verificando producto {producto_id} en ticket {ticket_id}...")
         cursor.execute("""
             SELECT ti.id, ti.producto_id, ti.producto_nombre, ti.cantidad_solicitada, 
                    ti.cantidad_entregada, ti.cantidad_devuelta, p.cantidad as stock_actual
@@ -2000,6 +2026,8 @@ async def devolver_ticket(ticket_id: int, devolucion: dict, request: Request):
             raise HTTPException(status_code=400, detail="Este producto no está en el ticket")
         
         item = dict(item)
+        logger.info(f"✅ Producto encontrado en ticket: {item['producto_nombre']}")
+        logger.info(f"📊 Cantidades - Entregada: {item['cantidad_entregada']}, Devuelta: {item['cantidad_devuelta']}")
         
         # Verificar que haya productos entregados para devolver
         if item["cantidad_entregada"] <= 0:
@@ -2013,14 +2041,20 @@ async def devolver_ticket(ticket_id: int, devolucion: dict, request: Request):
         if cantidad_devolver > item["cantidad_entregada"]:
             raise HTTPException(status_code=400, detail=f"Solo se pueden devolver hasta {item['cantidad_entregada']} unidades")
         
+        logger.info(f"📦 Cantidad a devolver: {cantidad_devolver}")
+        
         # Obtener estado de la devolución (por defecto "buen_estado")
         estado_devolucion = devolucion.get("estado", "buen_estado")
         if estado_devolucion not in ["buen_estado", "mal_estado"]:
             raise HTTPException(status_code=400, detail="Estado de devolución inválido")
         
+        logger.info(f"🏷️ Estado de devolución: {estado_devolucion}")
+        
         # Procesar devolución - mantener contadores independientes
         cantidad_devuelta_actual = item["cantidad_devuelta"] if item["cantidad_devuelta"] is not None else 0
         nueva_cantidad_devuelta = cantidad_devuelta_actual + cantidad_devolver
+        
+        logger.info(f"🔄 Actualizando cantidad_devuelta: {cantidad_devuelta_actual} → {nueva_cantidad_devuelta}")
         
         # Solo actualizar cantidad_devuelta, mantener cantidad_entregada fija
         cursor.execute("""
@@ -2033,6 +2067,7 @@ async def devolver_ticket(ticket_id: int, devolucion: dict, request: Request):
         nuevo_stock = item["stock_actual"]
         if estado_devolucion == "buen_estado":
             nuevo_stock += cantidad_devolver
+            logger.info(f"📈 Actualizando stock: {item['stock_actual']} → {nuevo_stock}")
             cursor.execute("""
                 UPDATE productos 
                 SET cantidad = ?, fecha_actualizacion = CURRENT_TIMESTAMP
@@ -2045,6 +2080,8 @@ async def devolver_ticket(ticket_id: int, devolucion: dict, request: Request):
         try:
             accion_historial = "devolucion_buen_estado" if estado_devolucion == "buen_estado" else "devolucion_mal_estado"
             detalles_historial = f"Devolución de ticket {ticket['numero_ticket']} - {cantidad_devolver} unidades ({estado_devolucion})"
+            
+            logger.info(f"📝 Registrando en historial: {accion_historial}")
             
             cursor.execute("""
                 INSERT INTO historial (accion, producto_id, cantidad_anterior, cantidad_nueva, usuario_id, usuario_nombre, detalles)
@@ -2062,6 +2099,7 @@ async def devolver_ticket(ticket_id: int, devolucion: dict, request: Request):
             logger.warning(f"Error registrando devolución en historial: {e}")
         
         # Verificar si todos los items fueron devueltos
+        logger.info("🔍 Verificando estado del ticket...")
         cursor.execute("""
             SELECT 
                 SUM(cantidad_solicitada) as total_solicitado,
@@ -2075,20 +2113,24 @@ async def devolver_ticket(ticket_id: int, devolucion: dict, request: Request):
         total_entregado = totales["total_entregado"] or 0
         total_devuelto = totales["total_devuelto"] or 0
         
+        logger.info(f"📊 Totales - Entregado: {total_entregado}, Devuelto: {total_devuelto}")
+        
         # Si todo lo entregado fue devuelto, cambiar estado a "devuelto"
         nuevo_estado = "devuelto" if total_devuelto >= total_entregado and total_entregado > 0 else "entregado"
         
         if nuevo_estado == "devuelto":
+            logger.info(f"🔄 Cambiando estado del ticket a: {nuevo_estado}")
             cursor.execute("""
                 UPDATE tickets_compra 
                 SET estado = ?
                 WHERE id = ?
             """, (nuevo_estado, ticket_id))
         
+        logger.info("💾 Guardando cambios en base de datos...")
         conn.commit()
         conn.close()
         
-        logger.info(f"Devolución procesada: {cantidad_devolver} unidades de {item['producto_nombre']} en ticket {ticket['numero_ticket']} - Estado: {estado_devolucion}")
+        logger.info(f"✅ Devolución procesada exitosamente: {cantidad_devolver} unidades de {item['producto_nombre']} en ticket {ticket['numero_ticket']} - Estado: {estado_devolucion}")
         
         mensaje_estado = "retornan al almacén" if estado_devolucion == "buen_estado" else "se consideran desecho"
         
@@ -2106,7 +2148,7 @@ async def devolver_ticket(ticket_id: int, devolucion: dict, request: Request):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error al procesar devolución: {e}")
+        logger.error(f"❌ Error al procesar devolución: {e}")
         raise HTTPException(status_code=500, detail=f"Error al procesar devolución: {str(e)}")
 
 if __name__ == "__main__":
