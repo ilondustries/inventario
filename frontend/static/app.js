@@ -1818,6 +1818,7 @@ class AlmacenApp {
     async confirmarTodasDevoluciones() {
         try {
             console.log('🔄 confirmarTodasDevoluciones llamado');
+            console.log('🆔 currentTicketId:', this.currentTicketId);
             
             if (!this.currentTicketId || !this.devolucionesPendientes || this.devolucionesPendientes.length === 0) {
                 this.showNotification('No hay devoluciones pendientes para confirmar', 'warning');
@@ -1825,6 +1826,9 @@ class AlmacenApp {
             }
             
             console.log('📦 Devoluciones a procesar:', this.devolucionesPendientes);
+            
+            // Guardar el ticket ID antes de procesar
+            const ticketId = this.currentTicketId;
             
             // Procesar todas las devoluciones
             let devolucionesExitosas = 0;
@@ -1834,22 +1838,22 @@ class AlmacenApp {
             
             for (const devolucion of this.devolucionesPendientes) {
                 try {
-            const devolucionData = {
+                    const devolucionData = {
                         codigo: `ID:${devolucion.producto.id}|Nombre:${devolucion.producto.nombre}`,
                         cantidad: devolucion.cantidad,
                         estado: devolucion.estado // Incluir el estado en los datos
-            };
+                    };
                     
                     console.log('📤 Enviando devolución:', devolucionData);
-            
-            const response = await fetch(`${this.apiUrl}/tickets/${this.currentTicketId}/devolver`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(devolucionData)
-            });
-            
+                    
+                    const response = await fetch(`${this.apiUrl}/tickets/${ticketId}/devolver`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(devolucionData)
+                    });
+                    
                     if (response.ok) {
                         devolucionesExitosas += devolucion.cantidad;
                         if (devolucion.estado === 'buen_estado') {
@@ -1859,7 +1863,7 @@ class AlmacenApp {
                         }
                         console.log(`✅ Devolución exitosa: ${devolucion.producto.nombre} x${devolucion.cantidad} (${devolucion.estado})`);
                     } else {
-                const error = await response.json();
+                        const error = await response.json();
                         console.error(`❌ Error devolviendo ${devolucion.producto.nombre}:`, error);
                         devolucionesFallidas += devolucion.cantidad;
                     }
@@ -1878,19 +1882,21 @@ class AlmacenApp {
             if (malosEstados > 0) {
                 mensaje += `\n❌ ${malosEstados} en mal estado (desecho)`;
             }
-            
-            this.showNotification(mensaje, 'success');
-            
             if (devolucionesFallidas > 0) {
-                this.showNotification(`⚠️ ${devolucionesFallidas} unidades no pudieron ser devueltas`, 'warning');
+                mensaje += `\n⚠️ ${devolucionesFallidas} unidades con errores`;
             }
             
-            // Cerrar modal y limpiar
+            this.showNotification(mensaje, devolucionesFallidas > 0 ? 'warning' : 'success');
+            
+            // Limpiar devoluciones pendientes
+            this.devolucionesPendientes = [];
+            
+            // Cerrar modal de devolución
             this.cerrarDevolucionModal();
             
         } catch (error) {
-            console.error('❌ Error confirmando devoluciones:', error);
-            this.showNotification('Error al procesar las devoluciones', 'error');
+            console.error('❌ Error en confirmarTodasDevoluciones:', error);
+            this.showNotification('Error al procesar devoluciones', 'error');
         }
     }
     
