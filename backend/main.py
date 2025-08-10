@@ -19,6 +19,7 @@ import barcode
 from barcode.writer import ImageWriter
 import ipaddress
 import tempfile
+import socket
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -118,6 +119,60 @@ def get_current_git_branch():
     except Exception as e:
         logger.warning(f"No se pudo detectar la rama Git: {e}")
     
+def get_local_ipv4_addresses() -> list:
+    """Obtiene direcciones IPv4 locales relevantes para el SAN del certificado.
+
+    Incluye:
+    - IP detectada por socket hacia una IP pública (método confiable en la mayoría de redes)
+    - IPs resueltas por hostname
+    - Valor de la variable de entorno SERVER_IP (opcional)
+    """
+    ipv4_addresses = set()
+    # 1) IP de la interfaz de salida (comúnmente la LAN)
+    try:
+        udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        udp_sock.connect(("8.8.8.8", 80))
+        ipv4_addresses.add(udp_sock.getsockname()[0])
+        udp_sock.close()
+    except Exception:
+        pass
+
+    # 2) IPs basadas en hostname
+    try:
+        hostname = socket.gethostname()
+        # gethostbyname
+        ip = socket.gethostbyname(hostname)
+        if ip and not ip.startswith("127."):
+            ipv4_addresses.add(ip)
+        # getaddrinfo
+        for info in socket.getaddrinfo(hostname, None):
+            ip = info[4][0]
+            if ":" not in ip and not ip.startswith("127."):
+                ipv4_addresses.add(ip)
+    except Exception:
+        pass
+
+    # 3) Variable de entorno explícita
+    env_ip = os.getenv("SERVER_IP")
+    if env_ip:
+        ipv4_addresses.add(env_ip.strip())
+
+    # Filtrar entradas inválidas
+    valid_ipv4 = []
+    for ip in ipv4_addresses:
+        try:
+            # Validar formato IPv4
+            ipaddress.IPv4Address(ip)
+            valid_ipv4.append(ip)
+        except Exception:
+            continue
+
+    # Garantizar al menos loopback
+    if not valid_ipv4:
+        valid_ipv4 = ["127.0.0.1"]
+
+    return sorted(set(valid_ipv4))
+
     return "main"  # Rama por defecto
 
 # Función para obtener conexión a la base de datos
@@ -346,12 +401,9 @@ def init_database():
                 solicitante_id INTEGER NOT NULL,
                 solicitante_nombre TEXT NOT NULL,
                 solicitante_rol TEXT NOT NULL,
-                estado TEXT DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'aprobado', 'rechazado', 'entregado', 'devuelto')),
+                estado TEXT DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'entregado', 'devuelto')),
                 fecha_solicitud TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                fecha_aprobacion TIMESTAMP,
-                aprobador_id INTEGER,
-                aprobador_nombre TEXT,
-                comentarios_aprobador TEXT,
+
                 fecha_entrega TIMESTAMP,
                 entregado_por_id INTEGER,
                 entregado_por_nombre TEXT,
@@ -1363,8 +1415,7 @@ async def listar_tickets(request: Request, estado: str = None, limit: int = 50):
             SELECT 
                 t.id, t.numero_ticket, t.orden_produccion, t.justificacion,
                 t.solicitante_id, t.solicitante_nombre, t.solicitante_rol, t.estado,
-                t.fecha_solicitud, t.fecha_aprobacion, t.aprobador_nombre,
-                t.comentarios_aprobador, t.fecha_entrega, t.entregado_por_nombre,
+                t.fecha_solicitud, t.fecha_entrega, t.entregado_por_nombre,
                 COUNT(ti.id) as total_items,
                 SUM(ti.cantidad_solicitada) as total_cantidad_solicitada
             FROM tickets_compra t
@@ -1421,85 +1472,7 @@ async def listar_tickets(request: Request, estado: str = None, limit: int = 50):
         logger.error(f"Error al listar tickets: {e}")
         raise HTTPException(status_code=500, detail=f"Error al obtener tickets: {str(e)}")
 
-@app.put("/api/tickets/{ticket_id}/aprobar")
-async def aprobar_ticket(ticket_id: int, decision: dict, request: Request):
-    """Aprobar o rechazar un ticket - Solo administradores"""
-    try:
-        current_user = get_current_user(request)
-        require_admin(current_user)
-        
-        accion = decision.get("accion")  # "aprobar" o "rechazar"
-        comentarios = decision.get("comentarios", "")
-        
-        if accion not in ["aprobar", "rechazar"]:
-            raise HTTPException(status_code=400, detail="Acción debe ser 'aprobar' o 'rechazar'")
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Verificar que el ticket existe y está pendiente
-        cursor.execute("""
-            SELECT id, numero_ticket, estado, solicitante_nombre
-            FROM tickets_compra 
-            WHERE id = ?
-        """, (ticket_id,))
-        
-        ticket = cursor.fetchone()
-        if not ticket:
-            raise HTTPException(status_code=404, detail="Ticket no encontrado")
-        
-        # Convertir a diccionario
-        ticket = dict(ticket)
-        
-        if ticket["estado"] != "pendiente":
-            raise HTTPException(status_code=400, detail="Solo se pueden aprobar/rechazar tickets pendientes")
-        
-        # Actualizar estado del ticket
-        nuevo_estado = "aprobado" if accion == "aprobar" else "rechazado"
-        fecha_aprobacion = datetime.now().isoformat() if accion == "aprobar" else None
-        
-        cursor.execute("""
-            UPDATE tickets_compra 
-            SET estado = ?, fecha_aprobacion = ?, aprobador_id = ?, aprobador_nombre = ?, comentarios_aprobador = ?
-            WHERE id = ?
-        """, (
-            nuevo_estado,
-            fecha_aprobacion,
-            current_user["id"],
-            current_user["nombre_completo"],
-            comentarios,
-            ticket_id
-        ))
-        
-        # Registrar en historial
-        try:
-            cursor.execute("""
-                INSERT INTO historial (accion, usuario_id, usuario_nombre, detalles)
-                VALUES (?, ?, ?, ?)
-            """, (
-                f"ticket_{accion}",
-                current_user["id"],
-                current_user["nombre_completo"],
-                f"Ticket {ticket['numero_ticket']} {accion} - Comentarios: {comentarios}"
-            ))
-        except sqlite3.OperationalError as e:
-            logger.warning(f"Error registrando en historial: {e}")
-        
-        conn.commit()
-        conn.close()
-        
-        logger.info(f"Ticket {ticket['numero_ticket']} {accion} por {current_user['username']}")
-        return {
-            "mensaje": f"Ticket {accion} exitosamente",
-            "numero_ticket": ticket["numero_ticket"],
-            "estado": nuevo_estado
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error al {accion} ticket: {e}")
-        raise HTTPException(status_code=500, detail=f"Error al procesar ticket: {str(e)}")
+
 
 @app.put("/api/tickets/{ticket_id}/entregar")
 async def entregar_ticket(ticket_id: int, entrega: dict, request: Request):
@@ -1522,8 +1495,8 @@ async def entregar_ticket(ticket_id: int, entrega: dict, request: Request):
         if not ticket:
             raise HTTPException(status_code=404, detail="Ticket no encontrado")
         
-        if ticket["estado"] != "aprobado":
-            raise HTTPException(status_code=400, detail="Solo se pueden entregar tickets aprobados")
+        if ticket["estado"] != "pendiente":
+            raise HTTPException(status_code=400, detail="Solo se pueden entregar tickets pendientes")
         
         # Obtener items del ticket
         cursor.execute("""
@@ -1613,18 +1586,22 @@ async def entregar_ticket(ticket_id: int, entrega: dict, request: Request):
         totales = dict(cursor.fetchone())
         nuevo_estado = "entregado" if totales["total_entregado"] >= totales["total_solicitado"] else "aprobado"
         
+        # Obtener comentarios de entrega si se proporcionaron
+        comentarios_entrega = entrega.get("comentarios_entrega")
+        
         # Actualizar estado del ticket
         fecha_entrega = datetime.now().isoformat() if nuevo_estado == "entregado" else None
         
         cursor.execute("""
             UPDATE tickets_compra 
-            SET estado = ?, fecha_entrega = ?, entregado_por_id = ?, entregado_por_nombre = ?
+            SET estado = ?, fecha_entrega = ?, entregado_por_id = ?, entregado_por_nombre = ?, comentarios_entrega = ?
             WHERE id = ?
         """, (
             nuevo_estado,
             fecha_entrega,
             current_user["id"],
             current_user["nombre_completo"],
+            comentarios_entrega,
             ticket_id
         ))
         
@@ -1660,8 +1637,7 @@ async def obtener_ticket(ticket_id: int, request: Request):
             SELECT 
                 t.id, t.numero_ticket, t.orden_produccion, t.justificacion,
                 t.solicitante_id, t.solicitante_nombre, t.solicitante_rol, t.estado,
-                t.fecha_solicitud, t.fecha_aprobacion, t.aprobador_nombre,
-                t.comentarios_aprobador, t.fecha_entrega, t.entregado_por_nombre
+                t.fecha_solicitud, t.fecha_entrega, t.entregado_por_nombre, t.comentarios_entrega
             FROM tickets_compra t
             WHERE t.id = ?
         """, (ticket_id,))
@@ -1778,11 +1754,7 @@ def generar_pdf_ticket(ticket_data: dict) -> bytes:
             
             # Información de aprobación (si existe)
             if ticket_data.get('aprobador_nombre'):
-                story.append(Paragraph("<b>INFORMACIÓN DE APROBACIÓN</b>", bold_style))
-                story.append(Paragraph(f"<b>Aprobado por:</b> {ticket_data['aprobador_nombre']}", normal_style))
-                story.append(Paragraph(f"<b>Fecha de Aprobación:</b> {ticket_data['fecha_aprobacion']}", normal_style))
-                if ticket_data.get('comentarios_aprobador'):
-                    story.append(Paragraph(f"<b>Comentarios:</b> {ticket_data['comentarios_aprobador']}", normal_style))
+                
                 story.append(Spacer(1, 15))
             
             # Información de entrega (si existe)
@@ -1790,6 +1762,11 @@ def generar_pdf_ticket(ticket_data: dict) -> bytes:
                 story.append(Paragraph("<b>INFORMACIÓN DE ENTREGA</b>", bold_style))
                 story.append(Paragraph(f"<b>Entregado por:</b> {ticket_data['entregado_por_nombre']}", normal_style))
                 story.append(Paragraph(f"<b>Fecha de Entrega:</b> {ticket_data['fecha_entrega']}", normal_style))
+                
+                # Agregar comentarios de entrega si existen
+                if ticket_data.get('comentarios_entrega'):
+                    story.append(Paragraph(f"<b>Comentarios de Entrega:</b> {ticket_data['comentarios_entrega']}", normal_style))
+                
                 story.append(Spacer(1, 15))
             
             # Información de devolución (si existe)
@@ -1882,8 +1859,7 @@ async def descargar_pdf_ticket(ticket_id: int, request: Request):
             SELECT 
                 t.id, t.numero_ticket, t.orden_produccion, t.justificacion,
                 t.solicitante_id, t.solicitante_nombre, t.solicitante_rol, t.estado,
-                t.fecha_solicitud, t.fecha_aprobacion, t.aprobador_nombre,
-                t.comentarios_aprobador, t.fecha_entrega, t.entregado_por_nombre
+                t.fecha_solicitud, t.fecha_entrega, t.entregado_por_nombre, t.comentarios_entrega
             FROM tickets_compra t
             WHERE t.id = ?
         """, (ticket_id,))
@@ -2175,14 +2151,27 @@ if __name__ == "__main__":
             )
             
             # Crear certificado
+            hostname = socket.gethostname()
             subject = issuer = x509.Name([
                 x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
                 x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "State"),
                 x509.NameAttribute(NameOID.LOCALITY_NAME, "City"),
                 x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Inventario Local"),
-                x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
+                x509.NameAttribute(NameOID.COMMON_NAME, hostname or "localhost"),
             ])
             
+            # Construir SAN dinámico con IPs locales y hostnames
+            san_entries = [
+                x509.DNSName("localhost"),
+                x509.DNSName(hostname) if hostname else x509.DNSName("localhost"),
+                x509.IPAddress(ipaddress.IPv4Address("127.0.0.1")),
+            ]
+            for ip in get_local_ipv4_addresses():
+                try:
+                    san_entries.append(x509.IPAddress(ipaddress.IPv4Address(ip)))
+                except Exception:
+                    continue
+
             cert = x509.CertificateBuilder().subject_name(
                 subject
             ).issuer_name(
@@ -2196,11 +2185,7 @@ if __name__ == "__main__":
             ).not_valid_after(
                 datetime.utcnow() + timedelta(days=365)
             ).add_extension(
-                x509.SubjectAlternativeName([
-                    x509.DNSName("localhost"),
-                    x509.IPAddress(ipaddress.IPv4Address("127.0.0.1")),
-                    x509.IPAddress(ipaddress.IPv4Address("192.168.1.134")),
-                ]),
+                x509.SubjectAlternativeName(san_entries),
                 critical=False,
             ).sign(private_key, hashes.SHA256())
             
@@ -2236,8 +2221,10 @@ if __name__ == "__main__":
     
     if cert_file and key_file:
         print("🔒 Iniciando servidor HTTPS...")
-        print(f"🌐 Acceda desde: https://192.168.1.134:{port}")
-        print(f"📱 Para dispositivos móviles: https://192.168.1.134:{port}")
+        ips_to_show = get_local_ipv4_addresses()
+        if ips_to_show:
+            for ip in ips_to_show:
+                print(f"🌐 Acceda desde: https://{ip}:{port}")
         print(f"💻 Para PC local: https://localhost:{port}")
         uvicorn.run(
             app, 
@@ -2249,7 +2236,11 @@ if __name__ == "__main__":
         )
     else:
         print("⚠️  Iniciando servidor HTTP (cámara limitada)")
-        print(f"🌐 Acceda desde: http://localhost:{port} para usar la cámara")
+        ips_to_show = get_local_ipv4_addresses()
+        if ips_to_show:
+            for ip in ips_to_show:
+                print(f"🌐 Acceda desde: http://{ip}:{port}")
+        print(f"💻 Acceso local: http://localhost:{port}")
         print("📱 Para dispositivos móviles: Use HTTPS (no disponible)")
         uvicorn.run(
             app, 

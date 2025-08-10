@@ -5,6 +5,7 @@ class AlmacenApp {
         this.filtroActual = '';
         this.currentUser = null;
         this.filtroStockBajo = false;
+        this.allTickets = []; // Array para almacenar todos los tickets para filtrado
         this.init();
     }
     
@@ -774,7 +775,6 @@ class AlmacenApp {
         const modales = [
             'ticketModal',
             'ticketDetalleModal', 
-            'ticketDecisionModal',
             'ticketEntregaModal',
             'qrModal',
             'confirmModal'
@@ -796,7 +796,6 @@ class AlmacenApp {
         const modales = [
             'ticketModal',
             'ticketDetalleModal', 
-            'ticketDecisionModal',
             'ticketEntregaModal'
         ];
         
@@ -817,7 +816,21 @@ class AlmacenApp {
             if (!response.ok) throw new Error('Error en la respuesta del servidor');
             
             const data = await response.json();
-            this.renderTickets(data.tickets);
+            const tickets = data.tickets || data;
+            
+            // Guardar todos los tickets para filtrado
+            this.allTickets = tickets;
+            
+            // Filtrar tickets devueltos para no mostrarlos en la vista principal
+            const ticketsVisibles = tickets.filter(ticket => ticket.estado !== 'devuelto');
+            
+            this.renderTickets(ticketsVisibles);
+            
+            // Actualizar contadores de tickets por estado
+            this.actualizarContadoresTickets();
+            
+            // Inicializar filtros de tickets
+            this.inicializarFiltrosTickets();
         } catch (error) {
             console.error('Error cargando tickets:', error);
             this.showNotification('Error al cargar tickets', 'error');
@@ -834,6 +847,58 @@ class AlmacenApp {
         }
         
         ticketsList.innerHTML = tickets.map(ticket => this.renderTicketCard(ticket)).join('');
+    }
+    
+    // Filtrar tickets por estado
+    filtrarTicketsPorEstado(estado) {
+        console.log('🔍 Filtrando tickets por estado:', estado);
+        
+        // Actualizar estado activo en los filtros
+        this.actualizarFiltroActivo(estado);
+        
+        // Aplicar filtro
+        if (estado === 'todos') {
+            this.renderTickets(this.allTickets);
+        } else {
+            const ticketsFiltrados = this.allTickets.filter(ticket => ticket.estado === estado);
+            this.renderTickets(ticketsFiltrados);
+        }
+    }
+    
+    // Actualizar filtro activo visualmente
+    actualizarFiltroActivo(estadoActivo) {
+        // Remover clase active de todos los filtros
+        document.querySelectorAll('.filter-circle').forEach(circle => {
+            circle.classList.remove('active');
+        });
+        
+        // Agregar clase active al filtro seleccionado
+        const filtroActivo = document.querySelector(`[data-estado="${estadoActivo}"]`);
+        if (filtroActivo) {
+            filtroActivo.classList.add('active');
+        }
+    }
+    
+    // Actualizar contadores de tickets por estado
+    actualizarContadoresTickets() {
+        if (!this.allTickets) return;
+        
+        const contadores = {
+            todos: this.allTickets.length,
+            pendiente: this.allTickets.filter(t => t.estado === 'pendiente').length,
+            entregado: this.allTickets.filter(t => t.estado === 'entregado').length,
+            devuelto: this.allTickets.filter(t => t.estado === 'devuelto').length
+        };
+        
+        // Actualizar contadores en el DOM
+        Object.keys(contadores).forEach(estado => {
+            const elemento = document.getElementById(`count-${estado}`);
+            if (elemento) {
+                elemento.textContent = contadores[estado];
+            }
+        });
+        
+        console.log('📊 Contadores actualizados:', contadores);
     }
     
     renderTicketCard(ticket) {
@@ -888,8 +953,6 @@ class AlmacenApp {
         
         if (this.currentUser.rol === 'admin') {
             if (ticket.estado === 'pendiente') {
-                actions.push('<button onclick="event.stopPropagation(); app.mostrarDecisionModal(' + ticket.id + ')" class="btn-primary">📋 Revisar</button>');
-            } else if (ticket.estado === 'aprobado') {
                 actions.push('<button onclick="event.stopPropagation(); app.mostrarEntregaModal(' + ticket.id + ')" class="btn-primary">📦 Entregar</button>');
             }
         }
@@ -1308,66 +1371,20 @@ class AlmacenApp {
     
     async crearTicket() {
         try {
-            console.log('🔍 Iniciando creación de ticket...');
-            
-            // Validar formulario
             const ordenProduccion = document.getElementById('ordenProduccion').value.trim();
             const justificacion = document.getElementById('justificacion').value.trim();
-            
-            console.log('📝 Datos del formulario:', { ordenProduccion, justificacion });
+            const items = this.ticketItems;
             
             if (!ordenProduccion || !justificacion) {
                 this.showNotification('Por favor complete todos los campos obligatorios', 'error');
                 return;
             }
             
-            // Recolectar items (solo productos escaneados)
-            const items = [];
-            const itemForms = document.querySelectorAll('.ticket-item-form');
-            
-            console.log('🔍 Encontrados', itemForms.length, 'formularios de items');
-            
-            for (const form of itemForms) {
-                console.log('🔍 Procesando formulario:', form);
-                console.log('🔍 Data attributes:', form.dataset);
-                
-                const cantidadSpan = form.querySelector('.cantidad-escaneos');
-                
-                console.log('🔍 Inputs encontrados:', { 
-                    cantidadSpan: cantidadSpan ? 'Sí' : 'No',
-                });
-                
-                // Obtener el ID del producto desde el data attribute
-                const productoId = parseInt(form.dataset.productoId);
-                
-                console.log('🔍 Producto ID extraído:', productoId);
-                
-                if (productoId && cantidadSpan && cantidadSpan.textContent) {
-                    const item = {
-                        producto_id: productoId,
-                        cantidad_solicitada: parseInt(cantidadSpan.textContent),
-                        precio_unitario: null // Precio unitario no se maneja aquí, se asume que es fijo o se calcula en backend
-                    };
-                    
-                    console.log('✅ Item agregado:', item);
-                    items.push(item);
-                } else {
-                    console.log('❌ Item no válido:', { 
-                        productoId, 
-                        cantidadSpan: cantidadSpan ? cantidadSpan.textContent : 'No encontrado',
-                        cantidadSpanExists: !!cantidadSpan
-                    });
-                }
-            }
-            
-            console.log('📦 Total de items válidos:', items.length);
-            
             if (items.length === 0) {
-                this.showNotification('Debe agregar al menos una herramienta al ticket (escanee códigos QR)', 'error');
+                this.showNotification('Debe agregar al menos una herramienta al ticket', 'error');
                 return;
             }
             
-            // Crear ticket
             const ticketData = {
                 orden_produccion: ordenProduccion,
                 justificacion: justificacion,
@@ -1385,64 +1402,26 @@ class AlmacenApp {
             });
             
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.detail || 'Error al crear ticket');
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Error al crear ticket');
             }
             
             const result = await response.json();
+            console.log('✅ Ticket creado exitosamente:', result);
             
-            console.log('🔍 Resultado de creación de ticket:', result);
-            
-            // Generar y descargar PDF automáticamente
-            try {
-                this.showNotification('Generando comprobante PDF...', 'info');
-                
-                console.log('🔍 Intentando generar PDF para ticket ID:', result.id);
-                
-                const pdfResponse = await fetch(`${this.apiUrl}/tickets/${result.id}/pdf`, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                if (pdfResponse.ok) {
-                    console.log('✅ PDF generado exitosamente');
-                    
-                    // Obtener el blob del PDF
-                    const blob = await pdfResponse.blob();
-                    console.log('📄 Tamaño del PDF:', blob.size, 'bytes');
-                    
-                    // Crear URL para descarga
-                    const url = window.URL.createObjectURL(blob);
-                    
-                    // Crear elemento de descarga
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `ticket_${result.numero_ticket}.pdf`;
-                    document.body.appendChild(a);
-                    a.click();
-                    
-                    // Limpiar
-                    window.URL.revokeObjectURL(url);
-                    document.body.removeChild(a);
-                    
-                    this.showNotification(`✅ Ticket ${result.numero_ticket} creado exitosamente. 📄 PDF descargado automáticamente.`, 'success');
-                } else {
-                    console.error('❌ Error en respuesta PDF:', pdfResponse.status, pdfResponse.statusText);
-                    this.showNotification(`✅ Ticket ${result.numero_ticket} creado exitosamente`, 'success');
-                }
-            } catch (pdfError) {
-                console.error('Error generando PDF:', pdfError);
-                this.showNotification(`✅ Ticket ${result.numero_ticket} creado exitosamente (PDF no disponible)`, 'warning');
-            }
-            
+            this.showNotification('Ticket creado exitosamente', 'success');
             this.cerrarTicketModal();
-            this.loadTickets();
+            
+            // Limpiar formulario
+            this.ticketItems = [];
+            this.actualizarListaItemsTicket();
+            
+            // Recargar tickets y actualizar contadores
+            await this.loadTickets();
             
         } catch (error) {
             console.error('❌ Error creando ticket:', error);
-            this.showNotification(error.message, 'error');
+            this.showNotification(`Error al crear ticket: ${error.message}`, 'error');
         }
     }
     
@@ -1496,7 +1475,6 @@ class AlmacenApp {
         };
         
         const fechaSolicitud = formatearFecha(ticket.fecha_solicitud);
-        const fechaAprobacion = formatearFecha(ticket.fecha_aprobacion);
         const fechaEntrega = formatearFecha(ticket.fecha_entrega);
         const fechaDevolucion = formatearFecha(ticket.fecha_devolucion);
         
@@ -1529,9 +1507,9 @@ class AlmacenApp {
                 <p><strong>Solicitante:</strong> ${ticket.solicitante_nombre} (${ticket.solicitante_rol})</p>
                 <p><strong>Estado:</strong> <span class="ticket-estado ${ticket.estado}">${ticket.estado}</span></p>
                 <p><strong>Fecha de Solicitud:</strong> ${fechaSolicitud}</p>
-                ${ticket.aprobador_nombre ? `<p><strong>Aprobado por:</strong> ${ticket.aprobador_nombre} (${fechaAprobacion})</p>` : ''}
-                ${ticket.comentarios_aprobador ? `<p><strong>Comentarios:</strong> ${ticket.comentarios_aprobador}</p>` : ''}
+
                 ${ticket.entregado_por_nombre ? `<p><strong>Entregado por:</strong> ${ticket.entregado_por_nombre} (${fechaEntrega})</p>` : ''}
+                ${ticket.comentarios_entrega ? `<p><strong>Comentarios de Entrega:</strong> ${ticket.comentarios_entrega}</p>` : ''}
                 ${ticket.devuelto_por_nombre ? `<p><strong>Devuelto por:</strong> ${ticket.devuelto_por_nombre} (${fechaDevolucion})</p>` : ''}
             </div>
             
@@ -1551,52 +1529,7 @@ class AlmacenApp {
         document.body.classList.add('modal-open');
     }
     
-    mostrarDecisionModal(ticketId) {
-        this.currentTicketId = ticketId;
-        document.getElementById('ticketDecisionModal').style.display = 'flex';
-        document.getElementById('ticketDecisionForm').reset();
-        // Prevenir scroll del body
-        document.body.classList.add('modal-open');
-    }
-    
-    cerrarDecisionModal() {
-        document.getElementById('ticketDecisionModal').style.display = 'none';
-        this.currentTicketId = null;
-        // Restaurar scroll del body
-        document.body.classList.remove('modal-open');
-    }
-    
-    async procesarDecisionTicket() {
-        try {
-            const accion = document.getElementById('decisionAccion').value;
-            const comentarios = document.getElementById('decisionComentarios').value;
-            
-            const response = await fetch(`${this.apiUrl}/tickets/${this.currentTicketId}/aprobar`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    accion: accion,
-                    comentarios: comentarios
-                })
-            });
-            
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.detail || 'Error al procesar ticket');
-            }
-            
-            const result = await response.json();
-            this.showNotification(`Ticket ${result.numero_ticket} ${accion} exitosamente`, 'success');
-            this.cerrarDecisionModal();
-            this.loadTickets();
-            
-        } catch (error) {
-            console.error('Error procesando ticket:', error);
-            this.showNotification(error.message, 'error');
-        }
-    }
+
     
     async mostrarEntregaModal(ticketId) {
         try {
@@ -1634,6 +1567,8 @@ class AlmacenApp {
     cerrarEntregaModal() {
         document.getElementById('ticketEntregaModal').style.display = 'none';
         this.currentTicketId = null;
+        // Limpiar comentarios de entrega
+        document.getElementById('comentariosEntrega').value = '';
         // Restaurar scroll del body
         document.body.classList.remove('modal-open');
     }
@@ -1658,13 +1593,17 @@ class AlmacenApp {
                 return;
             }
             
+            // Obtener comentarios de entrega
+            const comentariosEntrega = document.getElementById('comentariosEntrega').value.trim();
+            
             const response = await fetch(`${this.apiUrl}/tickets/${this.currentTicketId}/entregar`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    items: items
+                    items: items,
+                    comentarios_entrega: comentariosEntrega || null
                 })
             });
             
@@ -1676,7 +1615,9 @@ class AlmacenApp {
             const result = await response.json();
             this.showNotification(`Entrega procesada exitosamente. ${result.items_entregados} herramientas entregadas`, 'success');
             this.cerrarEntregaModal();
-            this.loadTickets();
+            
+            // Recargar tickets y actualizar contadores
+            await this.loadTickets();
             this.loadProductos(); // Recargar productos para actualizar inventario
             
         } catch (error) {
@@ -1697,7 +1638,9 @@ class AlmacenApp {
             }
             
             this.showNotification('Ticket cancelado exitosamente', 'success');
-            this.loadTickets();
+            
+            // Recargar tickets y actualizar contadores
+            await this.loadTickets();
             
         } catch (error) {
             console.error('Error cancelando ticket:', error);
@@ -1893,6 +1836,9 @@ class AlmacenApp {
             
             // Cerrar modal de devolución
             this.cerrarDevolucionModal();
+            
+            // Recargar tickets y actualizar contadores
+            await this.loadTickets();
             
         } catch (error) {
             console.error('❌ Error en confirmarTodasDevoluciones:', error);
@@ -2160,6 +2106,29 @@ class AlmacenApp {
         return acciones[accion] || accion;
     }
 
+    // Inicializar filtros de tickets
+    inicializarFiltrosTickets() {
+        // Establecer filtro "todos" como activo por defecto
+        this.actualizarFiltroActivo('todos');
+        
+        // Agregar event listeners para los filtros si no existen
+        const filtros = document.querySelectorAll('.filter-circle');
+        filtros.forEach(filtro => {
+            // Remover event listeners existentes para evitar duplicados
+            filtro.removeEventListener('click', this.handleFiltroClick);
+            
+            // Agregar nuevo event listener
+            filtro.addEventListener('click', this.handleFiltroClick.bind(this));
+        });
+        
+        console.log('🔧 Filtros de tickets inicializados');
+    }
+
+    // Manejador de clicks en filtros
+    handleFiltroClick(event) {
+        const estado = event.currentTarget.dataset.estado;
+        this.filtrarTicketsPorEstado(estado);
+    }
 
 }
 

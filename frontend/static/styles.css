@@ -851,6 +851,170 @@ body.modal-open {
     background: white;
 }
 
+/* Filtros visuales de tickets */
+.tickets-filters {
+    margin-bottom: 25px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 15px;
+    border: 2px solid #e9ecef;
+}
+
+.filter-circles {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    flex-wrap: wrap;
+}
+
+.filter-circle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    padding: 15px;
+    border-radius: 20px;
+    background: white;
+    border: 3px solid #e9ecef;
+    transition: all 0.3s ease;
+    min-width: 100px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.filter-circle:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+}
+
+.filter-circle.active {
+    border-color: #667eea;
+    box-shadow: 0 5px 20px rgba(102, 126, 234, 0.3);
+    transform: translateY(-2px);
+}
+
+.filter-circle[data-estado="pendiente"]:hover {
+    border-color: #ffc107;
+    box-shadow: 0 5px 15px rgba(255, 193, 7, 0.3);
+}
+
+.filter-circle[data-estado="entregado"]:hover {
+    border-color: #17a2b8;
+    box-shadow: 0 5px 15px rgba(23, 162, 184, 0.3);
+}
+
+.filter-circle[data-estado="devuelto"]:hover {
+    border-color: #6c757d;
+    box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
+}
+
+.circle-icon {
+    font-size: 2rem;
+    margin-bottom: 8px;
+}
+
+.circle-label {
+    font-weight: 600;
+    color: #333;
+    font-size: 0.9rem;
+    text-align: center;
+    margin-bottom: 5px;
+}
+
+.circle-count {
+    background: #667eea;
+    color: white;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+.filter-circle[data-estado="pendiente"] .circle-count {
+    background: #ffc107;
+    color: #333;
+}
+
+.filter-circle[data-estado="entregado"] .circle-count {
+    background: #17a2b8;
+    color: white;
+}
+
+.filter-circle[data-estado="devuelto"] .circle-count {
+    background: #6c757d;
+    color: white;
+}
+
+.filter-circle.active .circle-count {
+    background: #667eea;
+    color: white;
+    transform: scale(1.1);
+}
+
+/* Estilos responsivos para filtros */
+@media (max-width: 768px) {
+    .tickets-filters {
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .filter-circles {
+        gap: 15px;
+        justify-content: center;
+    }
+    
+    .filter-circle {
+        min-width: 80px;
+        padding: 12px 8px;
+    }
+    
+    .circle-icon {
+        font-size: 1.5rem;
+        margin-bottom: 6px;
+    }
+    
+    .circle-label {
+        font-size: 0.8rem;
+        margin-bottom: 4px;
+    }
+    
+    .circle-count {
+        width: 25px;
+        height: 25px;
+        font-size: 0.8rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .filter-circles {
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .filter-circle {
+        min-width: 70px;
+        padding: 10px 6px;
+    }
+    
+    .circle-icon {
+        font-size: 1.3rem;
+    }
+    
+    .circle-label {
+        font-size: 0.75rem;
+    }
+    
+    .circle-count {
+        width: 22px;
+        height: 22px;
+        font-size: 0.75rem;
+    }
+}
+
 .tickets-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));

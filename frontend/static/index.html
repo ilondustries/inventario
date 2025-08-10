@@ -121,6 +121,32 @@
                     </button>
                 </div>
                 
+                <!-- Filtros visuales por estado -->
+                <div class="tickets-filters">
+                    <div class="filter-circles">
+                        <div class="filter-circle active" data-estado="todos" onclick="app.filtrarTicketsPorEstado('todos')">
+                            <div class="circle-icon">📋</div>
+                            <div class="circle-label">Todos</div>
+                            <div class="circle-count" id="count-todos">0</div>
+                        </div>
+                        <div class="filter-circle" data-estado="pendiente" onclick="app.filtrarTicketsPorEstado('pendiente')">
+                            <div class="circle-icon">⏳</div>
+                            <div class="circle-label">Pendientes</div>
+                            <div class="circle-count" id="count-pendiente">0</div>
+                        </div>
+                        <div class="filter-circle" data-estado="entregado" onclick="app.filtrarTicketsPorEstado('entregado')">
+                            <div class="circle-icon">✅</div>
+                            <div class="circle-label">Entregados</div>
+                            <div class="circle-count" id="count-entregado">0</div>
+                        </div>
+                        <div class="filter-circle" data-estado="devuelto" onclick="app.filtrarTicketsPorEstado('devuelto')">
+                            <div class="circle-icon">🔄</div>
+                            <div class="circle-label">Devueltos</div>
+                            <div class="circle-count" id="count-devuelto">0</div>
+                        </div>
+                    </div>
+                </div>
+                
                 <div id="ticketsList" class="tickets-grid">
                     <!-- Los tickets se cargarán aquí dinámicamente -->
                 </div>
@@ -237,34 +263,7 @@
             </div>
         </div>
         
-        <!-- Modal para aprobar/rechazar ticket -->
-        <div id="ticketDecisionModal" class="modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3 id="ticketDecisionTitle">📋 Decisión del Ticket</h3>
-                    <button type="button" class="modal-close" onclick="app.cerrarDecisionModal()">×</button>
-                </div>
-                <form id="ticketDecisionForm">
-                    <div class="input-group">
-                        <label for="decisionAccion">Acción:</label>
-                        <select id="decisionAccion" required>
-                            <option value="aprobar">✅ Aprobar</option>
-                            <option value="rechazar">❌ Rechazar</option>
-                        </select>
-                    </div>
-                    
-                    <div class="input-group">
-                        <label for="decisionComentarios">Comentarios:</label>
-                        <textarea id="decisionComentarios" placeholder="Comentarios adicionales..."></textarea>
-                    </div>
-                    
-                    <div class="modal-buttons">
-                        <button type="submit" class="btn-primary">Confirmar</button>
-                        <button type="button" onclick="app.cerrarDecisionModal()">Cancelar</button>
-                    </div>
-                </form>
-            </div>
-        </div>
+
         
         <!-- Modal para entregar ticket -->
         <div id="ticketEntregaModal" class="modal">
@@ -275,6 +274,10 @@
                 </div>
                 <div id="ticketEntregaItems">
                     <!-- Items para entregar se cargarán aquí -->
+                </div>
+                <div class="input-group">
+                    <label for="comentariosEntrega">Comentarios de Entrega:</label>
+                    <textarea id="comentariosEntrega" placeholder="Agregue comentarios sobre la entrega (opcional)..." rows="3"></textarea>
                 </div>
                 <div class="modal-buttons">
                     <button onclick="app.procesarEntrega()" class="btn-primary">✅ Confirmar Entrega</button>
