@@ -125,24 +125,36 @@
                 <div class="tickets-filters">
                     <div class="filter-circles">
                         <div class="filter-circle active" data-estado="todos" onclick="app.filtrarTicketsPorEstado('todos')">
+                            <div class="circle-progress" id="progress-todos">
+                                <div class="circle-fill" id="fill-todos"></div>
+                                <div class="circle-percentage" id="percentage-todos">0%</div>
+                            </div>
                             <div class="circle-icon">📋</div>
                             <div class="circle-label">Todos</div>
-                            <div class="circle-count" id="count-todos">0</div>
                         </div>
                         <div class="filter-circle" data-estado="pendiente" onclick="app.filtrarTicketsPorEstado('pendiente')">
+                            <div class="circle-progress" id="progress-pendiente">
+                                <div class="circle-fill" id="fill-pendiente"></div>
+                                <div class="circle-percentage" id="percentage-pendiente">0%</div>
+                            </div>
                             <div class="circle-icon">⏳</div>
-                            <div class="circle-label">Pendientes</div>
-                            <div class="circle-count" id="count-pendiente">0</div>
+                            <div class="circle-label">Pendiente</div>
                         </div>
                         <div class="filter-circle" data-estado="entregado" onclick="app.filtrarTicketsPorEstado('entregado')">
+                            <div class="circle-progress" id="progress-entregado">
+                                <div class="circle-fill" id="fill-entregado"></div>
+                                <div class="circle-percentage" id="percentage-entregado">0%</div>
+                            </div>
                             <div class="circle-icon">✅</div>
-                            <div class="circle-label">Entregados</div>
-                            <div class="circle-count" id="count-entregado">0</div>
+                            <div class="circle-label">Entregado</div>
                         </div>
                         <div class="filter-circle" data-estado="devuelto" onclick="app.filtrarTicketsPorEstado('devuelto')">
-                            <div class="circle-icon">🔄</div>
-                            <div class="circle-label">Devueltos</div>
-                            <div class="circle-count" id="count-devuelto">0</div>
+                            <div class="circle-progress" id="progress-devuelto">
+                                <div class="circle-fill" id="fill-devuelto"></div>
+                                <div class="circle-percentage" id="percentage-devuelto">0%</div>
+                            </div>
+                            <div class="circle-icon">↩️</div>
+                            <div class="circle-label">Devuelto</div>
                         </div>
                     </div>
                 </div>
