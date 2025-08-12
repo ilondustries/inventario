@@ -6,6 +6,7 @@ class AlmacenApp {
         this.currentUser = null;
         this.filtroStockBajo = false;
         this.allTickets = []; // Array para almacenar todos los tickets para filtrado
+        this.ticketItems = []; // Array para almacenar los items del ticket actual
         this.init();
     }
     
@@ -881,24 +882,38 @@ class AlmacenApp {
     
     // Actualizar contadores de tickets por estado
     actualizarContadoresTickets() {
-        if (!this.allTickets) return;
+        if (!this.allTickets || this.allTickets.length === 0) return;
         
+        const total = this.allTickets.length;
         const contadores = {
-            todos: this.allTickets.length,
+            todos: total,
             pendiente: this.allTickets.filter(t => t.estado === 'pendiente').length,
             entregado: this.allTickets.filter(t => t.estado === 'entregado').length,
             devuelto: this.allTickets.filter(t => t.estado === 'devuelto').length
         };
         
-        // Actualizar contadores en el DOM
+        // Calcular porcentajes y actualizar DOM
         Object.keys(contadores).forEach(estado => {
-            const elemento = document.getElementById(`count-${estado}`);
-            if (elemento) {
-                elemento.textContent = contadores[estado];
+            const porcentaje = estado === 'todos' ? 100 : Math.round((contadores[estado] / total) * 100);
+            const elementoPorcentaje = document.getElementById(`percentage-${estado}`);
+            const elementoFill = document.getElementById(`fill-${estado}`);
+            
+            if (elementoPorcentaje) {
+                elementoPorcentaje.textContent = `${porcentaje}%`;
+            }
+            
+            if (elementoFill) {
+                elementoFill.style.height = `${porcentaje}%`;
             }
         });
         
-        console.log('📊 Contadores actualizados:', contadores);
+        // El filtro "Todos" siempre debe mostrar 100%
+        const fillTodos = document.getElementById('fill-todos');
+        if (fillTodos) {
+            fillTodos.style.height = '100%';
+        }
+        
+        console.log('📊 Contadores y porcentajes actualizados:', contadores);
     }
     
     renderTicketCard(ticket) {
@@ -999,6 +1014,9 @@ class AlmacenApp {
         // Limpiar formulario
         document.getElementById('ticketForm').reset();
         document.getElementById('ticketItemsList').innerHTML = '';
+        
+        // Limpiar array de items del ticket
+        this.ticketItems = [];
         
         // Remover instrucciones existentes antes de agregar nuevas
         const existingInstructions = document.querySelector('.ticket-instructions');
@@ -1332,6 +1350,8 @@ class AlmacenApp {
                 cantidadSpan.style.backgroundColor = '';
             }, 500);
             
+            // Actualizar el array ticketItems
+            this.actualizarListaItemsTicket();
         } else {
             // Si el producto no existe, crear nueva entrada
             const itemId = Date.now();
@@ -1360,12 +1380,53 @@ class AlmacenApp {
             
             this.showNotification(`✅ ${producto.nombre} agregado al ticket (1 escaneo)`, 'success');
         }
+        
+        // Actualizar el array ticketItems
+        this.actualizarListaItemsTicket();
+    }
+    
+    actualizarListaItemsTicket() {
+        // Limpiar array anterior
+        this.ticketItems = [];
+        
+        // Obtener todos los items del formulario
+        const itemForms = document.querySelectorAll('.ticket-item-form');
+        
+        itemForms.forEach(itemForm => {
+            const productoId = parseInt(itemForm.dataset.productoId);
+            const cantidadSpan = itemForm.querySelector('.cantidad-escaneos');
+            const precioInput = itemForm.querySelector('.precio-input');
+            
+            if (productoId && cantidadSpan && precioInput) {
+                const cantidad = parseInt(cantidadSpan.textContent) || 1;
+                const precio = parseFloat(precioInput.value) || 0;
+                
+                // Buscar el producto en el array de productos para obtener el nombre
+                const producto = this.productos.find(p => p.id === productoId);
+                
+                if (producto) {
+                    this.ticketItems.push({
+                        producto_id: productoId,
+                        cantidad_solicitada: cantidad,
+                        precio_unitario: precio
+                    });
+                }
+            }
+        });
+        
+        console.log('📋 ticketItems actualizado:', this.ticketItems);
     }
     
     removerItemTicket(itemId) {
-        const itemElement = document.querySelector(`[data-item-id="${itemId}"]`);
-        if (itemElement) {
-            itemElement.remove();
+        // Encontrar y eliminar el elemento del DOM
+        const itemForm = document.querySelector(`[data-item-id="${itemId}"]`);
+        if (itemForm) {
+            itemForm.remove();
+            
+            // Actualizar el array ticketItems
+            this.actualizarListaItemsTicket();
+            
+            this.showNotification('❌ Item removido del ticket', 'info');
         }
     }
     
@@ -1433,6 +1494,9 @@ class AlmacenApp {
         if (existingInstructions) {
             existingInstructions.remove();
         }
+        
+        // Limpiar array de items del ticket
+        this.ticketItems = [];
         
         // Restaurar scroll del body
         document.body.classList.remove('modal-open');
