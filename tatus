@@ -1,2 +1,145 @@
-* [32mdesarrollo[m
-  main[m
+warning: in the working copy of 'frontend/static/app.js', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/frontend/static/app.js b/frontend/static/app.js[m
+[1mindex 2cdc38f..7066d2f 100644[m
+[1m--- a/frontend/static/app.js[m
+[1m+++ b/frontend/static/app.js[m
+[36m@@ -6,6 +6,7 @@[m [mclass AlmacenApp {[m
+         this.currentUser = null;[m
+         this.filtroStockBajo = false;[m
+         this.allTickets = []; // Array para almacenar todos los tickets para filtrado[m
+[32m+[m[32m        this.ticketItems = []; // Array para almacenar los items del ticket actual[m
+         this.init();[m
+     }[m
+     [m
+[36m@@ -881,24 +882,38 @@[m [mclass AlmacenApp {[m
+     [m
+     // Actualizar contadores de tickets por estado[m
+     actualizarContadoresTickets() {[m
+[31m-        if (!this.allTickets) return;[m
+[32m+[m[32m        if (!this.allTickets || this.allTickets.length === 0) return;[m
+         [m
+[32m+[m[32m        const total = this.allTickets.length;[m
+         const contadores = {[m
+[31m-            todos: this.allTickets.length,[m
+[32m+[m[32m            todos: total,[m
+             pendiente: this.allTickets.filter(t => t.estado === 'pendiente').length,[m
+             entregado: this.allTickets.filter(t => t.estado === 'entregado').length,[m
+             devuelto: this.allTickets.filter(t => t.estado === 'devuelto').length[m
+         };[m
+         [m
+[31m-        // Actualizar contadores en el DOM[m
+[32m+[m[32m        // Calcular porcentajes y actualizar DOM[m
+         Object.keys(contadores).forEach(estado => {[m
+[31m-            const elemento = document.getElementById(`count-${estado}`);[m
+[31m-            if (elemento) {[m
+[31m-                elemento.textContent = contadores[estado];[m
+[32m+[m[32m            const porcentaje = estado === 'todos' ? 100 : Math.round((contadores[estado] / total) * 100);[m
+[32m+[m[32m            const elementoPorcentaje = document.getElementById(`percentage-${estado}`);[m
+[32m+[m[32m            const elementoFill = document.getElementById(`fill-${estado}`);[m
+[32m+[m[41m            [m
+[32m+[m[32m            if (elementoPorcentaje) {[m
+[32m+[m[32m                elementoPorcentaje.textContent = `${porcentaje}%`;[m
+[32m+[m[32m            }[m
+[32m+[m[41m            [m
+[32m+[m[32m            if (elementoFill) {[m
+[32m+[m[32m                elementoFill.style.height = `${porcentaje}%`;[m
+             }[m
+         });[m
+         [m
+[31m-        console.log('📊 Contadores actualizados:', contadores);[m
+[32m+[m[32m        // El filtro "Todos" siempre debe mostrar 100%[m
+[32m+[m[32m        const fillTodos = document.getElementById('fill-todos');[m
+[32m+[m[32m        if (fillTodos) {[m
+[32m+[m[32m            fillTodos.style.height = '100%';[m
+[32m+[m[32m        }[m
+[32m+[m[41m        [m
+[32m+[m[32m        console.log('📊 Contadores y porcentajes actualizados:', contadores);[m
+     }[m
+     [m
+     renderTicketCard(ticket) {[m
+[36m@@ -1000,6 +1015,9 @@[m [mclass AlmacenApp {[m
+         document.getElementById('ticketForm').reset();[m
+         document.getElementById('ticketItemsList').innerHTML = '';[m
+         [m
+[32m+[m[32m        // Limpiar array de items del ticket[m
+[32m+[m[32m        this.ticketItems = [];[m
+[32m+[m[41m        [m
+         // Remover instrucciones existentes antes de agregar nuevas[m
+         const existingInstructions = document.querySelector('.ticket-instructions');[m
+         if (existingInstructions) {[m
+[36m@@ -1332,6 +1350,8 @@[m [mclass AlmacenApp {[m
+                 cantidadSpan.style.backgroundColor = '';[m
+             }, 500);[m
+             [m
+[32m+[m[32m            // Actualizar el array ticketItems[m
+[32m+[m[32m            this.actualizarListaItemsTicket();[m
+         } else {[m
+             // Si el producto no existe, crear nueva entrada[m
+             const itemId = Date.now();[m
+[36m@@ -1360,12 +1380,53 @@[m [mclass AlmacenApp {[m
+             [m
+             this.showNotification(`✅ ${producto.nombre} agregado al ticket (1 escaneo)`, 'success');[m
+         }[m
+[32m+[m[41m        [m
+[32m+[m[32m        // Actualizar el array ticketItems[m
+[32m+[m[32m        this.actualizarListaItemsTicket();[m
+[32m+[m[32m    }[m
+[32m+[m[41m    [m
+[32m+[m[32m    actualizarListaItemsTicket() {[m
+[32m+[m[32m        // Limpiar array anterior[m
+[32m+[m[32m        this.ticketItems = [];[m
+[32m+[m[41m        [m
+[32m+[m[32m        // Obtener todos los items del formulario[m
+[32m+[m[32m        const itemForms = document.querySelectorAll('.ticket-item-form');[m
+[32m+[m[41m        [m
+[32m+[m[32m        itemForms.forEach(itemForm => {[m
+[32m+[m[32m            const productoId = parseInt(itemForm.dataset.productoId);[m
+[32m+[m[32m            const cantidadSpan = itemForm.querySelector('.cantidad-escaneos');[m
+[32m+[m[32m            const precioInput = itemForm.querySelector('.precio-input');[m
+[32m+[m[41m            [m
+[32m+[m[32m            if (productoId && cantidadSpan && precioInput) {[m
+[32m+[m[32m                const cantidad = parseInt(cantidadSpan.textContent) || 1;[m
+[32m+[m[32m                const precio = parseFloat(precioInput.value) || 0;[m
+[32m+[m[41m                [m
+[32m+[m[32m                // Buscar el producto en el array de productos para obtener el nombre[m
+[32m+[m[32m                const producto = this.productos.find(p => p.id === productoId);[m
+[32m+[m[41m                [m
+[32m+[m[32m                if (producto) {[m
+[32m+[m[32m                    this.ticketItems.push({[m
+[32m+[m[32m                        producto_id: productoId,[m
+[32m+[m[32m                        cantidad_solicitada: cantidad,[m
+[32m+[m[32m                        precio_unitario: precio[m
+[32m+[m[32m                    });[m
+[32m+[m[32m                }[m
+[32m+[m[32m            }[m
+[32m+[m[32m        });[m
+[32m+[m[41m        [m
+[32m+[m[32m        console.log('📋 ticketItems actualizado:', this.ticketItems);[m
+     }[m
+     [m
+     removerItemTicket(itemId) {[m
+[31m-        const itemElement = document.querySelector(`[data-item-id="${itemId}"]`);[m
+[31m-        if (itemElement) {[m
+[31m-            itemElement.remove();[m
+[32m+[m[32m        // Encontrar y eliminar el elemento del DOM[m
+[32m+[m[32m        const itemForm = document.querySelector(`[data-item-id="${itemId}"]`);[m
+[32m+[m[32m        if (itemForm) {[m
+[32m+[m[32m            itemForm.remove();[m
+[32m+[m[41m            [m
+[32m+[m[32m            // Actualizar el array ticketItems[m
+[32m+[m[32m            this.actualizarListaItemsTicket();[m
+[32m+[m[41m            [m
+[32m+[m[32m            this.showNotification('❌ Item removido del ticket', 'info');[m
+         }[m
+     }[m
+     [m
+[36m@@ -1434,6 +1495,9 @@[m [mclass AlmacenApp {[m
+             existingInstructions.remove();[m
+         }[m
+         [m
+[32m+[m[32m        // Limpiar array de items del ticket[m
+[32m+[m[32m        this.ticketItems = [];[m
+[32m+[m[41m        [m
+         // Restaurar scroll del body[m
+         document.body.classList.remove('modal-open');[m
+     }[m
