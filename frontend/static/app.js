@@ -10,6 +10,27 @@ class AlmacenApp {
         this.init();
     }
     
+    // Función unificada para formatear fechas
+    formatearFecha(fechaString) {
+        if (!fechaString) return 'N/A';
+        
+        try {
+            // Si la fecha no tiene zona horaria, agregar 'Z' para UTC
+            const fecha = new Date(fechaString.includes('T') ? fechaString : fechaString + 'Z');
+            return fecha.toLocaleString('es-ES', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        } catch (e) {
+            console.error('Error formateando fecha:', e);
+            return fechaString;
+        }
+    }
+    
     async init() {
         // Verificar autenticación primero
         await this.checkAuth();
@@ -917,7 +938,7 @@ class AlmacenApp {
     }
     
     renderTicketCard(ticket) {
-        const fecha = new Date(ticket.fecha_solicitud).toLocaleDateString('es-ES');
+        const fecha = this.formatearFecha(ticket.fecha_solicitud);
         const itemsHtml = ticket.items.map(item => `
             <div class="ticket-item">
                 <div class="ticket-item-name">${item.producto_nombre}</div>
@@ -1000,6 +1021,9 @@ class AlmacenApp {
             actions.push('<button onclick="event.stopPropagation(); app.cancelarTicket(' + ticket.id + ')" class="btn-danger">❌ Cancelar</button>');
         }
         
+        // Botón de descarga de PDF para todos los usuarios (solo en modal de detalles)
+        // Este botón se mostrará en el modal de detalles, no en la tarjeta
+        
         console.log('🔍 Acciones generadas:', actions);
         return actions.join('');
     }
@@ -1011,12 +1035,16 @@ class AlmacenApp {
             return;
         }
         
+        console.log('🧹 Limpiando formulario de ticket...');
+        
         // Limpiar formulario
         document.getElementById('ticketForm').reset();
         document.getElementById('ticketItemsList').innerHTML = '';
         
         // Limpiar array de items del ticket
         this.ticketItems = [];
+        
+        console.log('✅ Formulario limpiado, ticketItems:', this.ticketItems);
         
         // Remover instrucciones existentes antes de agregar nuevas
         const existingInstructions = document.querySelector('.ticket-instructions');
@@ -1350,8 +1378,8 @@ class AlmacenApp {
                 cantidadSpan.style.backgroundColor = '';
             }, 500);
             
-            // Actualizar el array ticketItems
-            this.actualizarListaItemsTicket();
+            console.log(`🔄 Producto existente: ${producto.nombre} - Escaneos: ${newScans}`);
+            
         } else {
             // Si el producto no existe, crear nueva entrada
             const itemId = Date.now();
@@ -1379,9 +1407,10 @@ class AlmacenApp {
             itemsList.insertAdjacentHTML('beforeend', itemHtml);
             
             this.showNotification(`✅ ${producto.nombre} agregado al ticket (1 escaneo)`, 'success');
+            console.log(`🆕 Nuevo producto agregado: ${producto.nombre} - Escaneos: 1`);
         }
         
-        // Actualizar el array ticketItems
+        // Actualizar el array ticketItems (solo una vez al final)
         this.actualizarListaItemsTicket();
     }
     
@@ -1392,7 +1421,12 @@ class AlmacenApp {
         // Obtener todos los items del formulario
         const itemForms = document.querySelectorAll('.ticket-item-form');
         
-        itemForms.forEach(itemForm => {
+        console.log(`🔍 Encontrados ${itemForms.length} items en el formulario`);
+        
+        // Usar un Set para evitar duplicados por producto_id
+        const productosProcesados = new Set();
+        
+        itemForms.forEach((itemForm, index) => {
             const productoId = parseInt(itemForm.dataset.productoId);
             const cantidadSpan = itemForm.querySelector('.cantidad-escaneos');
             const precioInput = itemForm.querySelector('.precio-input');
@@ -1400,6 +1434,12 @@ class AlmacenApp {
             if (productoId && cantidadSpan && precioInput) {
                 const cantidad = parseInt(cantidadSpan.textContent) || 1;
                 const precio = parseFloat(precioInput.value) || 0;
+                
+                // Verificar que no sea un producto duplicado
+                if (productosProcesados.has(productoId)) {
+                    console.warn(`⚠️ Producto duplicado detectado y omitido: ID ${productoId}`);
+                    return; // Continuar con el siguiente item
+                }
                 
                 // Buscar el producto en el array de productos para obtener el nombre
                 const producto = this.productos.find(p => p.id === productoId);
@@ -1410,11 +1450,47 @@ class AlmacenApp {
                         cantidad_solicitada: cantidad,
                         precio_unitario: precio
                     });
+                    
+                    productosProcesados.add(productoId);
+                    console.log(`📋 Item ${index + 1}: ${producto.nombre} x${cantidad} ($${precio})`);
+                } else {
+                    console.warn(`⚠️ Producto con ID ${productoId} no encontrado en la lista de productos`);
                 }
+            } else {
+                console.warn(`⚠️ Item ${index + 1} tiene datos incompletos:`, {
+                    productoId,
+                    cantidadSpan: cantidadSpan?.textContent,
+                    precioInput: precioInput?.value
+                });
             }
         });
         
-        console.log('📋 ticketItems actualizado:', this.ticketItems);
+        console.log('📋 ticketItems final:', this.ticketItems);
+        console.log(`📊 Total de items únicos: ${this.ticketItems.length}`);
+        console.log(`🔍 Productos procesados:`, Array.from(productosProcesados));
+    }
+    
+    limpiarItemsDuplicados(items) {
+        const itemsUnicos = [];
+        const productosVistos = new Set();
+        
+        console.log('🧹 Iniciando limpieza de items duplicados...');
+        console.log(`📊 Items originales: ${items.length}`);
+        
+        items.forEach((item, index) => {
+            if (!productosVistos.has(item.producto_id)) {
+                productosVistos.add(item.producto_id);
+                itemsUnicos.push(item);
+                console.log(`✅ Item ${index + 1} agregado: Producto ID ${item.producto_id}`);
+            } else {
+                console.warn(`⚠️ Producto duplicado removido: ID ${item.producto_id} (ya procesado anteriormente)`);
+            }
+        });
+        
+        console.log(`🧹 Limpieza completada: ${items.length} → ${itemsUnicos.length} items únicos`);
+        console.log(`🔍 Productos únicos:`, Array.from(productosVistos));
+        
+        return itemsUnicos;
     }
     
     removerItemTicket(itemId) {
@@ -1436,6 +1512,12 @@ class AlmacenApp {
             const justificacion = document.getElementById('justificacion').value.trim();
             const items = this.ticketItems;
             
+            console.log('🔍 Validando datos del ticket...');
+            console.log('📋 Orden de producción:', ordenProduccion);
+            console.log('📝 Justificación:', justificacion);
+            console.log('🛠️ Items a enviar:', items);
+            console.log('📊 Total de items:', items.length);
+            
             if (!ordenProduccion || !justificacion) {
                 this.showNotification('Por favor complete todos los campos obligatorios', 'error');
                 return;
@@ -1446,20 +1528,49 @@ class AlmacenApp {
                 return;
             }
             
-            const ticketData = {
+            // Validar que todos los items tengan datos válidos
+            const itemsValidos = items.filter(item => 
+                item.producto_id && 
+                item.cantidad_solicitada > 0 && 
+                item.precio_unitario >= 0
+            );
+            
+            if (itemsValidos.length !== items.length) {
+                console.warn('⚠️ Algunos items no son válidos, filtrando...');
+                console.log('❌ Items inválidos:', items.filter(item => 
+                    !item.producto_id || 
+                    item.cantidad_solicitada <= 0 || 
+                    item.precio_unitario < 0
+                ));
+            }
+            
+            // Limpiar y validar items antes de enviar
+            const itemsUnicos = this.limpiarItemsDuplicados(itemsValidos);
+            if (itemsUnicos.length !== itemsValidos.length) {
+                console.log(`🔄 Items duplicados removidos: ${itemsValidos.length} → ${itemsUnicos.length}`);
+            }
+            
+            // Verificación final antes de enviar
+            console.log('🔍 Verificación final antes de enviar:');
+            itemsUnicos.forEach((item, index) => {
+                const producto = this.productos.find(p => p.id === item.producto_id);
+                console.log(`  ${index + 1}. ${producto?.nombre || 'Producto desconocido'} - ID: ${item.producto_id} - Cantidad: ${item.cantidad_solicitada} - Precio: $${item.precio_unitario}`);
+            });
+            
+            const ticketDataFinal = {
                 orden_produccion: ordenProduccion,
                 justificacion: justificacion,
-                items: items
+                items: itemsUnicos
             };
             
-            console.log('📤 Enviando ticket:', ticketData);
+            console.log('📤 Enviando ticket final:', ticketDataFinal);
             
             const response = await fetch(`${this.apiUrl}/tickets`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(ticketData)
+                body: JSON.stringify(ticketDataFinal)
             });
             
             if (!response.ok) {
@@ -1471,6 +1582,29 @@ class AlmacenApp {
             console.log('✅ Ticket creado exitosamente:', result);
             
             this.showNotification('Ticket creado exitosamente', 'success');
+            
+            // Descargar PDF automáticamente después de crear el ticket
+            try {
+                console.log('📄 Descargando PDF automáticamente...');
+                
+                // Descarga directa del PDF
+                const pdfResponse = await fetch(`${this.apiUrl}/tickets/${result.id}/pdf`);
+                if (pdfResponse.ok) {
+                    const blob = await pdfResponse.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `ticket_${result.numero_ticket}.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                }
+            } catch (pdfError) {
+                console.warn('⚠️ No se pudo descargar el PDF automáticamente:', pdfError);
+                // No mostrar error al usuario, solo en consola
+            }
+            
             this.cerrarTicketModal();
             
             // Limpiar formulario
@@ -1487,6 +1621,8 @@ class AlmacenApp {
     }
     
     cerrarTicketModal() {
+        console.log('🚪 Cerrando modal de ticket...');
+        
         document.getElementById('ticketModal').style.display = 'none';
         
         // Limpiar instrucciones al cerrar
@@ -1497,6 +1633,14 @@ class AlmacenApp {
         
         // Limpiar array de items del ticket
         this.ticketItems = [];
+        
+        // Limpiar lista de items del DOM
+        const itemsList = document.getElementById('ticketItemsList');
+        if (itemsList) {
+            itemsList.innerHTML = '';
+        }
+        
+        console.log('✅ Modal cerrado, ticketItems limpiado:', this.ticketItems);
         
         // Restaurar scroll del body
         document.body.classList.remove('modal-open');
@@ -1517,30 +1661,9 @@ class AlmacenApp {
     }
     
     mostrarTicketDetalle(ticket) {
-        // Función para formatear fechas correctamente
-        const formatearFecha = (fechaString) => {
-            if (!fechaString) return 'N/A';
-            
-            try {
-                // Si la fecha no tiene zona horaria, agregar 'Z' para UTC
-                const fecha = new Date(fechaString.includes('T') ? fechaString : fechaString + 'Z');
-                return fecha.toLocaleString('es-ES', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
-                });
-            } catch (e) {
-                console.error('Error formateando fecha:', e);
-                return fechaString;
-            }
-        };
-        
-        const fechaSolicitud = formatearFecha(ticket.fecha_solicitud);
-        const fechaEntrega = formatearFecha(ticket.fecha_entrega);
-        const fechaDevolucion = formatearFecha(ticket.fecha_devolucion);
+        const fechaSolicitud = this.formatearFecha(ticket.fecha_solicitud);
+        const fechaEntrega = this.formatearFecha(ticket.fecha_entrega);
+        const fechaDevolucion = this.formatearFecha(ticket.fecha_devolucion);
         
         const itemsHtml = ticket.items.map(item => {
             const cantidadDevuelta = item.cantidad_devuelta || 0;
@@ -2134,7 +2257,7 @@ class AlmacenApp {
         }
         
         const historialHTML = historial.map(item => {
-            const fecha = new Date(item.fecha).toLocaleString('es-ES');
+            const fecha = this.formatearFecha(item.fecha);
             const accionDisplay = this.getAccionDisplay(item.accion);
             
             return `
