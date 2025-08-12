@@ -45,6 +45,9 @@ class AlmacenApp {
         this.setupSearchDebounce();
         this.updateUserInfo();
         this.initTickets();
+        
+        // Configurar visibilidad del botón de nuevo ticket según el rol
+        this.configurarVisibilidadBotones();
     }
     
     async checkAuth() {
@@ -77,6 +80,9 @@ class AlmacenApp {
             
             // Ocultar formulario de productos para usuarios que no sean administradores
             this.updateFormVisibility();
+            
+            // Configurar visibilidad de botones según el rol
+            this.configurarVisibilidadBotones();
         }
     }
     
@@ -132,6 +138,28 @@ class AlmacenApp {
                 // Mostrar sección de productos para usuarios no-admin
                 this.mostrarSeccion('products-section');
             }
+        }
+    }
+    
+    configurarVisibilidadBotones() {
+        const nuevoTicketBtn = document.getElementById('nuevoTicketBtn');
+        
+        if (nuevoTicketBtn) {
+            if (this.currentUser && this.currentUser.rol === 'admin') {
+                // Ocultar botón de nuevo ticket para administradores (no pueden crear tickets)
+                nuevoTicketBtn.style.display = 'none';
+                console.log('🔒 Botón "Nuevo Ticket" oculto para administrador');
+            } else if (this.currentUser && (this.currentUser.rol === 'supervisor' || this.currentUser.rol === 'operador')) {
+                // Mostrar botón de nuevo ticket para supervisores y operadores
+                nuevoTicketBtn.style.display = 'inline-block';
+                console.log('✅ Botón "Nuevo Ticket" visible para supervisor/operador');
+            } else {
+                // Ocultar botón de nuevo ticket para usuarios sin rol específico
+                nuevoTicketBtn.style.display = 'none';
+                console.log('🔒 Botón "Nuevo Ticket" oculto para usuario sin rol específico');
+            }
+        } else {
+            console.warn('⚠️ Botón "Nuevo Ticket" no encontrado en el DOM');
         }
     }
     
