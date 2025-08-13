@@ -391,6 +391,12 @@ class AlmacenApp {
             this.limpiarFormulario();
             this.loadProductos();
             this.loadEstadisticas();
+            
+            // VOLVER AL MENÚ "INVENTARIO" DESPUÉS DE GUARDAR/ACTUALIZAR
+            console.log('🔄 Operación completada, volviendo al menú de Inventario...');
+            this.mostrarSeccion('products-section');
+            
+            console.log('✅ Producto guardado/actualizado, volviendo al inventario');
         } catch (error) {
             console.error('Error:', error);
             this.showNotification(error.message, 'error');
@@ -400,6 +406,8 @@ class AlmacenApp {
     editarProducto(productoId) {
         const producto = this.productos.find(p => p.id === productoId);
         if (!producto) return;
+        
+        console.log('✏️ Editando producto:', producto.nombre);
         
         // Llenar formulario
         document.getElementById('productoId').value = producto.id;
@@ -415,21 +423,41 @@ class AlmacenApp {
         document.getElementById('submitBtn').textContent = 'Actualizar Herramienta';
         document.getElementById('cancelBtn').style.display = 'block';
         
-        // Scroll al formulario
-        document.querySelector('.form-section').scrollIntoView({ behavior: 'smooth' });
+        // CAMBIO AUTOMÁTICO AL MENÚ "GESTIÓN DE HERRAMIENTAS"
+        console.log('🔄 Cambiando automáticamente al menú de Gestión de Herramientas...');
+        this.mostrarSeccion('form-section');
+        
+        // Scroll al formulario (opcional, ya que mostrarSeccion lo maneja)
+        setTimeout(() => {
+            document.querySelector('.form-section').scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+        
+        console.log('✅ Producto cargado y menú cambiado automáticamente');
     }
     
     cancelarEdicion() {
+        console.log('❌ Cancelando edición...');
+        
         this.limpiarFormulario();
         document.getElementById('formTitle').textContent = '➕ Agregar Herramienta';
         document.getElementById('submitBtn').textContent = 'Guardar Herramienta';
         document.getElementById('cancelBtn').style.display = 'none';
+        
+        // VOLVER AL MENÚ "INVENTARIO" AL CANCELAR
+        console.log('🔄 Volviendo al menú de Inventario...');
+        this.mostrarSeccion('products-section');
+        
+        console.log('✅ Edición cancelada, volviendo al inventario');
     }
     
     limpiarFormulario() {
         document.getElementById('productoForm').reset();
         document.getElementById('productoId').value = '';
-        this.cancelarEdicion();
+        
+        // Resetear título y botones sin llamar a cancelarEdicion (evitar recursión)
+        document.getElementById('formTitle').textContent = '➕ Agregar Herramienta';
+        document.getElementById('submitBtn').textContent = 'Guardar Herramienta';
+        document.getElementById('cancelBtn').style.display = 'none';
     }
     
     async eliminarProducto(productoId) {

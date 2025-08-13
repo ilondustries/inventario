@@ -114,53 +114,59 @@
             
             <!-- Sistema de Tickets de Compra -->
             <div class="tickets-section content-section">
-                <div class="section-header">
-                    <h2>🎫 Tickets de Compra</h2>
-                    <button id="nuevoTicketBtn" class="btn-primary" onclick="app.mostrarFormularioTicket()">
-                        ➕ Nuevo Ticket
-                    </button>
-                </div>
-                
-                <!-- Filtros visuales por estado -->
-                <div class="tickets-filters">
-                    <div class="filter-circles">
-                        <div class="filter-circle active" data-estado="todos" onclick="app.filtrarTicketsPorEstado('todos')">
-                            <div class="circle-progress" id="progress-todos">
-                                <div class="circle-fill" id="fill-todos"></div>
-                                <div class="circle-percentage" id="percentage-todos">0%</div>
+                <!-- HEADER FIJO (STICKY) -->
+                <div class="tickets-sticky-header">
+                    <div class="section-header">
+                        <h2>🎫 Tickets de Compra</h2>
+                        <button id="nuevoTicketBtn" class="btn-primary" onclick="app.mostrarFormularioTicket()">
+                            ➕ Nuevo Ticket
+                        </button>
+                    </div>
+                    
+                    <!-- Filtros visuales por estado -->
+                    <div class="tickets-filters">
+                        <div class="filter-circles">
+                            <div class="filter-circle active" data-estado="todos" onclick="app.filtrarTicketsPorEstado('todos')">
+                                <div class="circle-progress" id="progress-todos">
+                                    <div class="circle-fill" id="fill-todos"></div>
+                                    <div class="circle-percentage" id="percentage-todos">0%</div>
+                                </div>
+                                <div class="circle-icon">📋</div>
+                                <div class="circle-label">Todos</div>
                             </div>
-                            <div class="circle-icon">📋</div>
-                            <div class="circle-label">Todos</div>
-                        </div>
-                        <div class="filter-circle" data-estado="pendiente" onclick="app.filtrarTicketsPorEstado('pendiente')">
-                            <div class="circle-progress" id="progress-pendiente">
-                                <div class="circle-fill" id="fill-pendiente"></div>
-                                <div class="circle-percentage" id="percentage-pendiente">0%</div>
+                            <div class="filter-circle" data-estado="pendiente" onclick="app.filtrarTicketsPorEstado('pendiente')">
+                                <div class="circle-progress" id="progress-pendiente">
+                                    <div class="circle-fill" id="fill-pendiente"></div>
+                                    <div class="circle-percentage" id="percentage-pendiente">0%</div>
+                                </div>
+                                <div class="circle-icon">⏳</div>
+                                <div class="circle-label">Pendiente</div>
                             </div>
-                            <div class="circle-icon">⏳</div>
-                            <div class="circle-label">Pendiente</div>
-                        </div>
-                        <div class="filter-circle" data-estado="entregado" onclick="app.filtrarTicketsPorEstado('entregado')">
-                            <div class="circle-progress" id="progress-entregado">
-                                <div class="circle-fill" id="fill-entregado"></div>
-                                <div class="circle-percentage" id="percentage-entregado">0%</div>
+                            <div class="filter-circle" data-estado="entregado" onclick="app.filtrarTicketsPorEstado('entregado')">
+                                <div class="circle-progress" id="progress-entregado">
+                                    <div class="circle-fill" id="fill-entregado"></div>
+                                    <div class="circle-percentage" id="percentage-entregado">0%</div>
+                                </div>
+                                <div class="circle-icon">✅</div>
+                                <div class="circle-label">Entregado</div>
                             </div>
-                            <div class="circle-icon">✅</div>
-                            <div class="circle-label">Entregado</div>
-                        </div>
-                        <div class="filter-circle" data-estado="devuelto" onclick="app.filtrarTicketsPorEstado('devuelto')">
-                            <div class="circle-progress" id="progress-devuelto">
-                                <div class="circle-fill" id="fill-devuelto"></div>
-                                <div class="circle-percentage" id="percentage-devuelto">0%</div>
+                            <div class="filter-circle" data-estado="devuelto" onclick="app.filtrarTicketsPorEstado('devuelto')">
+                                <div class="circle-progress" id="progress-devuelto">
+                                    <div class="circle-fill" id="fill-devuelto"></div>
+                                    <div class="circle-percentage" id="percentage-devuelto">0%</div>
+                                </div>
+                                <div class="circle-icon">↩️</div>
+                                <div class="circle-label">Devuelto</div>
                             </div>
-                            <div class="circle-icon">↩️</div>
-                            <div class="circle-label">Devuelto</div>
                         </div>
                     </div>
                 </div>
                 
-                <div id="ticketsList" class="tickets-grid">
-                    <!-- Los tickets se cargarán aquí dinámicamente -->
+                <!-- CONTENIDO SCROLLABLE -->
+                <div class="tickets-content">
+                    <div id="ticketsList" class="tickets-grid">
+                        <!-- Los tickets se cargarán aquí dinámicamente -->
+                    </div>
                 </div>
             </div>
             
