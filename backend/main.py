@@ -1277,29 +1277,53 @@ async def check_auth(request: Request):
     logger.info(f"Check auth result: {result}")
     return result
 
-def generar_numero_ticket() -> str:
-    """Generar número único de ticket"""
+def validar_orden_produccion(orden_produccion: str) -> bool:
+    """Validar formato de orden de producción"""
+    # Debe ser exactamente 5 dígitos, solo números
+    if not orden_produccion or len(orden_produccion) != 5:
+        return False
+    
+    # Solo debe contener números
+    if not orden_produccion.isdigit():
+        return False
+    
+    return True
+
+def generar_numero_ticket(orden_produccion: str) -> str:
+    """Generar número de ticket usando orden de producción"""
+    if not validar_orden_produccion(orden_produccion):
+        raise HTTPException(
+            status_code=400, 
+            detail="La orden de producción debe ser exactamente 5 dígitos numéricos"
+        )
+    
+    # Verificar que no exista ya un ticket con esta orden
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Obtener el último ticket para generar número secuencial
-        cursor.execute("SELECT MAX(CAST(SUBSTR(numero_ticket, 6) AS INTEGER)) FROM tickets_compra")
-        ultimo_numero = cursor.fetchone()[0]
-        
-        if ultimo_numero is None:
-            ultimo_numero = 0
-        
-        nuevo_numero = ultimo_numero + 1
-        numero_ticket = f"TICK-{nuevo_numero:06d}"
+        cursor.execute("SELECT COUNT(*) FROM tickets_compra WHERE orden_produccion = ?", (orden_produccion,))
+        if cursor.fetchone()[0] > 0:
+            conn.close()
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Ya existe un ticket para la orden de producción {orden_produccion}"
+            )
         
         conn.close()
+        
+        # Generar número de ticket usando la orden de producción
+        numero_ticket = f"TICK-{orden_produccion}"
         return numero_ticket
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error generando número de ticket: {e}")
-        # Fallback con timestamp
-        import time
-        return f"TICK-{int(time.time())}"
+        logger.error(f"Error validando orden de producción: {e}")
+        raise HTTPException(
+            status_code=500, 
+            detail="Error interno validando orden de producción"
+        )
 
 @app.post("/api/tickets")
 async def crear_ticket_compra(ticket: dict, request: Request):
@@ -1335,8 +1359,8 @@ async def crear_ticket_compra(ticket: dict, request: Request):
         if len(productos_existentes) != len(productos_ids):
             raise HTTPException(status_code=400, detail="Uno o más productos no existen")
         
-        # Generar número de ticket
-        numero_ticket = generar_numero_ticket()
+        # Generar número de ticket usando la orden de producción
+        numero_ticket = generar_numero_ticket(ticket["orden_produccion"])
         
         # Crear ticket principal
         cursor.execute("""

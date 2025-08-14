@@ -2432,6 +2432,25 @@ body.modal-open {
     box-shadow: none;
 } 
 
+/* Estilos para validación de campos */
+.valid {
+    border-color: #28a745 !important;
+    box-shadow: 0 0 5px rgba(40, 167, 69, 0.3) !important;
+}
+
+.invalid {
+    border-color: #dc3545 !important;
+    box-shadow: 0 0 5px rgba(220, 53, 69, 0.3) !important;
+}
+
+.form-help {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-top: 4px;
+    display: block;
+    font-style: italic;
+}
+
 /* Estilos responsivos para header sticky de tickets */
 @media (max-width: 768px) {
     .tickets-sticky-header {

@@ -253,6 +253,18 @@ class AlmacenApp {
         window.addEventListener('focus', () => {
             this.handlePageFocus();
         });
+        
+        // Validación en tiempo real para orden de producción
+        const ordenProduccionInput = document.getElementById('ordenProduccion');
+        if (ordenProduccionInput) {
+            ordenProduccionInput.addEventListener('input', (e) => {
+                this.validarOrdenProduccionEnTiempoReal(e.target);
+            });
+            
+            ordenProduccionInput.addEventListener('blur', (e) => {
+                this.validarOrdenProduccionEnTiempoReal(e.target);
+            });
+        }
     }
     
     setupSearchDebounce() {
@@ -263,6 +275,27 @@ class AlmacenApp {
                 this.filtrarProductos();
             }, 300);
         });
+    }
+    
+    validarOrdenProduccionEnTiempoReal(input) {
+        const valor = input.value.trim();
+        const esValido = /^\d{5}$/.test(valor);
+        
+        // Remover clases de validación anteriores
+        input.classList.remove('valid', 'invalid');
+        
+        if (valor === '') {
+            // Campo vacío, no mostrar validación
+            return;
+        }
+        
+        if (esValido) {
+            input.classList.add('valid');
+            input.title = '✅ Formato correcto';
+        } else {
+            input.classList.add('invalid');
+            input.title = '❌ Debe ser exactamente 5 dígitos numéricos';
+        }
     }
     
     async loadProductos() {
@@ -1574,8 +1607,15 @@ class AlmacenApp {
             console.log('🛠️ Items a enviar:', items);
             console.log('📊 Total de items:', items.length);
             
+            // Validar formato de orden de producción (exactamente 5 dígitos numéricos)
             if (!ordenProduccion || !justificacion) {
                 this.showNotification('Por favor complete todos los campos obligatorios', 'error');
+                return;
+            }
+            
+            // Validar que la orden de producción sea exactamente 5 dígitos numéricos
+            if (!/^\d{5}$/.test(ordenProduccion)) {
+                this.showNotification('La orden de producción debe ser exactamente 5 dígitos numéricos (ej: 12345)', 'error');
                 return;
             }
             
