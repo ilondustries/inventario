@@ -27,12 +27,73 @@ from reportlab.lib.units import inch
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
-# Configurar logging
+import time
+import json
+import threading
+from datetime import datetime, timedelta
+
+# Variable global para controlar el thread de alertas
+alert_thread = None
+stop_alert_thread = False
+
+def run_automatic_alerts():
+    """Ejecutar alertas automáticas cada 48 horas
+    
+    Esta función se ejecuta en un thread separado y:
+    1. Verifica productos con stock bajo cada 48 horas
+    2. Envía alertas automáticamente si es necesario
+    3. Maneja re-alertas cada 48 horas si no se surte
+    4. NO se ejecuta al crear/actualizar/entregar productos
+    """
+    global stop_alert_thread
+    
+    while not stop_alert_thread:
+        try:
+            if ALERT_SYSTEM_AVAILABLE and ALERT_CONFIG["enabled"]:
+                logger.info("🔍 Ejecutando verificación automática de stock bajo...")
+                result = send_stock_alerts()
+                if result["alertas_enviadas"] > 0:
+                    logger.info(f"📧 {result['alertas_enviadas']} alertas enviadas automáticamente")
+                else:
+                    logger.info("✅ No hay productos con stock bajo")
+            else:
+                logger.info("⚠️ Sistema de alertas no disponible o deshabilitado")
+        except Exception as e:
+            logger.error(f"❌ Error en verificación automática: {e}")
+        
+        # Esperar 48 horas (48 * 3600 segundos)
+        for _ in range(48 * 3600):
+            if stop_alert_thread:
+                break
+            time.sleep(1)
+
+# Configurar logging primero
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Importar sistema de alertas por email
+try:
+    from gmail_smtp import init_alert_system, send_stock_alerts
+    ALERT_SYSTEM_AVAILABLE = True
+    logger.info("✅ Sistema de alertas por email disponible")
+except ImportError as e:
+    ALERT_SYSTEM_AVAILABLE = False
+    logger.warning(f"⚠️ Sistema de alertas no disponible: {e}")
+
 # Crear directorio de datos si no existe
 os.makedirs("../data", exist_ok=True)
+
+# Configuración del sistema de alertas por email
+# IMPORTANTE: Las alertas se ejecutan automáticamente cada 48 horas
+# NO se ejecutan al crear/actualizar/entregar productos
+ALERT_CONFIG = {
+    "gmail_email": "ivan.longoria@gmail.com",
+    "gmail_password": "gjvrafutjeonkytd",  # Contraseña de aplicación
+    "alert_emails": ["compras@longoriatm.com.mx"],
+    "enabled": True,
+    "check_interval_hours": 48,  # Verificar cada 48 horas
+    "re_alert_hours": 48  # Re-alerta cada 48 horas
+}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -49,6 +110,34 @@ async def lifespan(app: FastAPI):
     else:
         db_name = "almacen_main.db"
     
+    # Inicializar sistema de alertas
+    if ALERT_SYSTEM_AVAILABLE and ALERT_CONFIG["enabled"]:
+        try:
+            # Construir ruta correcta de la base de datos
+            db_path = f"../data/{db_name}"
+            
+            success = init_alert_system(
+                ALERT_CONFIG["gmail_email"],
+                ALERT_CONFIG["gmail_password"],
+                ALERT_CONFIG["alert_emails"],
+                db_path
+            )
+            if success:
+                logger.info("✅ Sistema de alertas por email inicializado")
+                
+                # Iniciar thread de alertas automáticas cada 48 horas
+                global alert_thread
+                alert_thread = threading.Thread(target=run_automatic_alerts, daemon=True)
+                alert_thread.start()
+                logger.info("🚀 Thread de alertas automáticas iniciado (cada 48 horas)")
+                
+            else:
+                logger.error("❌ Error inicializando sistema de alertas")
+        except Exception as e:
+            logger.error(f"❌ Error inicializando alertas: {e}")
+    else:
+        logger.info("⚠️ Sistema de alertas deshabilitado")
+    
     print("✅ Base de datos inicializada")
     print(f"🌿 Rama configurada: {branch}")
     print(f"🗄️  Base de datos: {db_name}")
@@ -56,6 +145,11 @@ async def lifespan(app: FastAPI):
     
     yield
     # Shutdown
+    global stop_alert_thread
+    stop_alert_thread = True
+    if alert_thread and alert_thread.is_alive():
+        logger.info("🛑 Deteniendo thread de alertas automáticas...")
+        alert_thread.join(timeout=5)
     print("🛑 Servidor detenido")
 
 app = FastAPI(
@@ -84,6 +178,8 @@ SESSION_CONFIG = {
     "check_session_on_focus": True, # Verificar sesión al recuperar foco
     "log_all_logouts": True        # Registrar todos los logouts en historial
 }
+
+# Sistema de alertas por email (WhatsApp eliminado)
 
 # Función para detectar la rama Git actual
 def get_current_git_branch():
@@ -485,64 +581,6 @@ async def read_login():
     """Servir la página de login"""
     return FileResponse("../frontend/static/login.html")
 
-@app.get("/api/productos")
-async def get_productos():
-    """Obtener todos los productos"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT id, codigo_barras, nombre, descripcion, cantidad, 
-                   cantidad_minima, ubicacion, categoria, precio_unitario,
-                   codigo_qr, fecha_creacion, fecha_actualizacion
-            FROM productos 
-            ORDER BY nombre
-        """)
-        productos = [dict(row) for row in cursor.fetchall()]
-        conn.close()
-        return {"productos": productos}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al obtener productos: {str(e)}")
-
-@app.get("/api/productos/{producto_id}/qr")
-async def get_qr_producto(producto_id: int):
-    """Obtener código QR de un producto específico"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT id, nombre, codigo_barras, codigo_qr
-            FROM productos 
-            WHERE id = ?
-        """, (producto_id,))
-        producto = cursor.fetchone()
-        conn.close()
-        
-        if not producto:
-            raise HTTPException(status_code=404, detail="Producto no encontrado")
-        
-        # Si no tiene código QR, generarlo
-        if not producto["codigo_qr"]:
-            codigo_qr = generar_codigo_qr(producto["id"], producto["nombre"], producto["codigo_barras"])
-            if codigo_qr:
-                conn = get_db_connection()
-                cursor = conn.cursor()
-                cursor.execute("""
-                    UPDATE productos SET codigo_qr = ? WHERE id = ?
-                """, (codigo_qr, producto_id))
-                conn.commit()
-                conn.close()
-                return {"qr": codigo_qr}
-        
-        # Verificar si el QR ya tiene el formato data:image/png;base64,
-        qr_data = producto["codigo_qr"]
-        if qr_data and not qr_data.startswith("data:image/png;base64,"):
-            qr_data = f"data:image/png;base64,{qr_data}"
-        
-        return {"qr": qr_data}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al obtener QR: {str(e)}")
-
 @app.get("/api/productos/{producto_id}/barcode")
 async def get_barcode_producto(producto_id: int):
     """Obtener código de barras de un producto específico"""
@@ -573,6 +611,25 @@ async def get_barcode_producto(producto_id: int):
         return {"barcode": codigo_barras}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener código de barras: {str(e)}")
+
+@app.get("/api/productos")
+async def get_productos():
+    """Obtener todos los productos"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, codigo_barras, nombre, descripcion, cantidad, 
+                   cantidad_minima, ubicacion, categoria, precio_unitario,
+                   codigo_qr, fecha_creacion, fecha_actualizacion
+            FROM productos 
+            ORDER BY nombre
+        """)
+        productos = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return {"productos": productos}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener productos: {str(e)}")
 
 @app.post("/api/productos/buscar")
 async def buscar_producto_por_codigo(datos: dict):
@@ -796,6 +853,9 @@ async def crear_producto(producto: dict, request: Request):
         conn.commit()
         conn.close()
         
+        # Sistema de alertas automático cada 48 horas (no en cada operación)
+        # Las alertas se ejecutan automáticamente en background, no aquí
+        
         logger.info(f"Producto creado exitosamente con ID: {producto_id}")
         return {"mensaje": "Herramienta creada exitosamente", "id": producto_id}
     except sqlite3.IntegrityError as e:
@@ -852,9 +912,74 @@ async def actualizar_producto(producto_id: int, producto: dict, request: Request
         conn.commit()
         conn.close()
         
+        # Sistema de alertas automático cada 48 horas (no en cada operación)
+        # Las alertas se ejecutan automáticamente en background, no aquí
+        
         return {"mensaje": "Herramienta actualizada exitosamente"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al actualizar herramienta: {str(e)}")
+
+
+
+@app.post("/api/alertas/probar")
+async def probar_sistema_alertas(request: Request):
+    """Probar el sistema de alertas - Solo administradores"""
+    try:
+        current_user = get_current_user(request)
+        require_admin(current_user)
+        
+        if not ALERT_SYSTEM_AVAILABLE:
+            raise HTTPException(status_code=503, detail="Sistema de alertas no disponible")
+        
+        if not ALERT_CONFIG["enabled"]:
+            raise HTTPException(status_code=503, detail="Sistema de alertas deshabilitado")
+        
+        logger.info(f"Administrador {current_user['username']} probando sistema de alertas")
+        
+        # Probar el sistema
+        from gmail_smtp import test_alert_system
+        success = test_alert_system()
+        
+        if success:
+            return {
+                "mensaje": "Sistema de alertas funcionando correctamente",
+                "estado": "OK",
+                "detalle": "Conexión SMTP y envío de emails funcionando"
+            }
+        else:
+            return {
+                "mensaje": "Error en el sistema de alertas",
+                "estado": "ERROR",
+                "detalle": "Verificar configuración SMTP y credenciales"
+            }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error probando sistema de alertas: {e}")
+        raise HTTPException(status_code=500, detail=f"Error probando alertas: {str(e)}")
+
+@app.get("/api/alertas/estado")
+async def obtener_estado_alertas(request: Request):
+    """Obtener estado del sistema de alertas - Solo administradores"""
+    try:
+        current_user = get_current_user(request)
+        require_admin(current_user)
+        
+        return {
+            "sistema_disponible": ALERT_SYSTEM_AVAILABLE,
+            "sistema_habilitado": ALERT_CONFIG["enabled"],
+            "email_origen": ALERT_CONFIG["gmail_email"],
+            "emails_destino": ALERT_CONFIG["alert_emails"],
+            "verificacion_intervalo": f"{ALERT_CONFIG['check_interval_hours']} horas (automático)",
+            "re_alertas_cada": f"{ALERT_CONFIG['re_alert_hours']} horas"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error obteniendo estado de alertas: {e}")
+        raise HTTPException(status_code=500, detail=f"Error obteniendo estado: {str(e)}")
 
 @app.delete("/api/productos/{producto_id}")
 async def eliminar_producto(producto_id: int, request: Request):
@@ -1496,8 +1621,6 @@ async def listar_tickets(request: Request, estado: str = None, limit: int = 50):
         logger.error(f"Error al listar tickets: {e}")
         raise HTTPException(status_code=500, detail=f"Error al obtener tickets: {str(e)}")
 
-
-
 @app.put("/api/tickets/{ticket_id}/entregar")
 async def entregar_ticket(ticket_id: int, entrega: dict, request: Request):
     """Entregar herramientas de un ticket aprobado - Solo administradores"""
@@ -1631,6 +1754,9 @@ async def entregar_ticket(ticket_id: int, entrega: dict, request: Request):
         
         conn.commit()
         conn.close()
+        
+        # Sistema de alertas automático cada 48 horas (no en cada operación)
+        # Las alertas se ejecutan automáticamente en background, no aquí
         
         logger.info(f"Ticket {ticket['numero_ticket']} entregado por {current_user['username']}")
         return {
@@ -2151,6 +2277,10 @@ async def devolver_ticket(ticket_id: int, devolucion: dict, request: Request):
         logger.error(f"❌ Error al procesar devolución: {e}")
         raise HTTPException(status_code=500, detail=f"Error al procesar devolución: {str(e)}")
 
+# ============================================================================
+
+# ============================================================================
+
 if __name__ == "__main__":
     import ssl
     import tempfile
@@ -2235,7 +2365,12 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"⚠️  Error generando certificado SSL: {e}")
             return None, None
-    
+
+# ============================================================================
+
+# ============================================================================
+
+if __name__ == "__main__":
     # Intentar crear certificado SSL
     print("🔧 Configurando servidor...")
     cert_file, key_file = create_self_signed_cert()
