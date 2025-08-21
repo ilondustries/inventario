@@ -86,14 +86,29 @@ os.makedirs("../data", exist_ok=True)
 # Configuración del sistema de alertas por email
 # IMPORTANTE: Las alertas se ejecutan automáticamente cada 48 horas
 # NO se ejecutan al crear/actualizar/entregar productos
-ALERT_CONFIG = {
-    "gmail_email": "ivan.longoria@gmail.com",
-    "gmail_password": "gjvrafutjeonkytd",  # Contraseña de aplicación
-    "alert_emails": ["compras@longoriatm.com.mx"],
-    "enabled": True,
-    "check_interval_hours": 48,  # Verificar cada 48 horas
-    "re_alert_hours": 48  # Re-alerta cada 48 horas
-}
+# Las credenciales se cargan desde variables de entorno para mayor seguridad
+
+def load_alert_config():
+    """Cargar configuración de alertas desde variables de entorno"""
+    try:
+        # Intentar cargar desde archivo config.env
+        from dotenv import load_dotenv
+        load_dotenv('config.env')
+    except ImportError:
+        # Si no hay python-dotenv, usar os.getenv directamente
+        pass
+    
+    return {
+        "gmail_email": os.getenv("GMAIL_EMAIL", "ivan.longoria@gmail.com"),
+        "gmail_password": os.getenv("GMAIL_PASSWORD", ""),  # Debe configurarse en config.env
+        "alert_emails": os.getenv("ALERT_EMAILS", "compras@longoriatm.com.mx").split(","),
+        "enabled": os.getenv("ALERT_SYSTEM_ENABLED", "true").lower() == "true",
+        "check_interval_hours": int(os.getenv("ALERT_CHECK_INTERVAL_HOURS", "48")),
+        "re_alert_hours": int(os.getenv("ALERT_RE_ALERT_HOURS", "48"))
+    }
+
+# Cargar configuración de alertas
+ALERT_CONFIG = load_alert_config()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

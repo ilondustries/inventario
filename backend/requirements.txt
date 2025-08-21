@@ -7,5 +7,4 @@ qrcode[pil]
 Pillow
 python-barcode 
 reportlab==4.4.2
-selenium==4.15.0
-webdriver-manager==4.0.1 
+python-dotenv==1.0.0 

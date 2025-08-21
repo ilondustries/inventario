@@ -1,9 +1,9 @@
-# Base de datos SQLite
-data/*.db
-data/*.db-shm
-data/*.db-wal
+# Archivos de configuración con credenciales
+.env
+config.env
+*.env
 
-# Archivos temporales de Python
+# Archivos de Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -25,17 +25,16 @@ wheels/
 .installed.cfg
 *.egg
 
-# Entornos virtuales
-venv/
-env/
-ENV/
-
-# Archivos de configuración local
-.env
-.env.local
+# Archivos de base de datos (opcional)
+# *.db
+# *.sqlite
 
 # Logs
 *.log
+
+# Archivos temporales
+*.tmp
+*.temp
 
 # Archivos del sistema
 .DS_Store
@@ -45,9 +44,4 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
-*.swo
-
-# Archivos de certificados SSL
-*.pem
-*.key
-*.crt 
+*.swo 
