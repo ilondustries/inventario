@@ -216,7 +216,7 @@ else:
 1. **Dashboard de alertas** en frontend (opcional)
 2. **Historial de alertas** en base de datos
 3. **Configuración de umbrales** personalizados
-4. **Integración con WhatsApp** (alternativa)
+4. **Sistema de notificaciones avanzado** (opcional)
 5. **Reportes de consumo** de herramientas
 
 ### 🔧 **Optimizaciones Técnicas**

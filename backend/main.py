@@ -93,7 +93,7 @@ def load_alert_config():
     try:
         # Intentar cargar desde archivo config.env
         from dotenv import load_dotenv
-        load_dotenv('config.env')
+        load_dotenv('../config.env')
     except ImportError:
         # Si no hay python-dotenv, usar os.getenv directamente
         pass
